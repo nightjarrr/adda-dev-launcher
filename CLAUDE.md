@@ -22,19 +22,7 @@ adda-dev.tmux.conf       # tmux session config (arrives via #404)
 .adda-init.sh            # repo-level init hook (installs pre-commit hook)
 .quality-gates.toml      # local quality gate definitions
 docs/conventions.md      # coding conventions for this repo
-CONTRIBUTING.md          # contribution guidelines
-SECURITY.md              # security policy
 ```
-
-## How to run
-
-Once the launcher script is present (after #404), invoke it from the host:
-
-```sh
-./adda-dev.sh
-```
-
-See `adda-dev.env.example` for required configuration.
 
 ## Toolchain
 
@@ -46,5 +34,4 @@ See `adda-dev.env.example` for required configuration.
 ## References
 
 - `docs/conventions.md` — Bash style conventions for this project.
-- Global ADDA SDLC workflow — seeded into the dev runtime image at `~/.claude/CLAUDE.md`.
-- `adda-dev-runtime/docs/launcher-container-contract.md` — authoritative host-container contract.
+- `https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md` — authoritative host-container contract.

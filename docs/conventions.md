@@ -7,7 +7,7 @@
 - Structure logic into named functions; group related functions under `# ---`-delimited section headings.
 - `# shellcheck disable=SC…` requires a `# Why:` comment on the immediately following line.
 
-## Style
+### Style
 
 - Prefer `[[ … ]]` over `[ … ]` for conditionals.
 - Quote all variable expansions: `"${var}"`.

@@ -3,9 +3,7 @@ set -euo pipefail
 # Repo-level init hook for adda-dev-launcher.
 # Invoked as a subprocess by the entrypoint at bootstrap and by current-issue switch mid-session.
 # Inputs:  none (no dependencies to install for a shell project)
-# Outputs: .git/hooks/pre-commit installed; stale CLAUDE.local.md removed
-
-rm -f /workspace/CLAUDE.local.md
+# Outputs: .git/hooks/pre-commit installed
 
 # Install pre-commit hook that gates commits on quality-gates (inside dev container only)
 PRE_COMMIT=.git/hooks/pre-commit
