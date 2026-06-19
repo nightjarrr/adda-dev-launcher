@@ -1,0 +1,4 @@
+[[gate]]
+name = "shell-syntax"
+description = "Bash syntax check on all shell scripts"
+command = "fdfind -HI -e sh -t f . -x bash -n {}"
