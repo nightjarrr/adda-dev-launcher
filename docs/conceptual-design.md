@@ -98,21 +98,21 @@ Container isolation reduces likelihood and blast radius; it does not reduce risk
 
 ### Prompt injection
 
-Adversarial content may reach the AI agent's context through web pages, dependency READMEs, Issue bodies, PR comments, fetched files, or repository content.
+Adversarial content in the agent's context may manipulate its actions within the session.
 
-Launcher-enforced mitigations: ephemeral runtime boundary limits persistence and blast radius; narrow GitHub Token scope prevents cross-repository or account-level damage; network egress allow-list limits where compromised code can communicate. The container contributes complementary mitigations — AI harness permission configuration and PR review as the final human gate — described in the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md).
+Launcher-enforced mitigations: ephemeral runtime boundary limits persistence and blast radius; narrow GitHub Token scope prevents cross-repository or account-level damage; network egress allow-list limits where compromised code can communicate. The container contributes complementary mitigations — described in the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md).
 
 Residual risk: hostile content may influence changes on the current branch until caught at review.
 
 ### Malicious dependencies
 
-A dependency may execute hostile code during install, test, build, or runtime. Three dependency classes are distinguished:
+A dependency of the launcher or proxy sidecar may execute hostile code on the host. Because these components run in the trusted perimeter, a compromise here is higher-severity than an in-container compromise.
 
-- **Host-side components** — the launcher script, network proxy sidecar binary, and any host OS libraries they depend on. These run in the trusted perimeter; a compromised host-side component is higher-severity than an in-container compromise because it operates with host-level trust. Mitigations: keep the launcher minimal; pin and audit upstream dependencies of both the launcher and the proxy sidecar; keep the host OS patched.
-- **Container/toolchain dependencies** — OS packages, shell tools, language managers, the AI harness, and other infrastructure baked into the image at build time. Versions are pinned in image definitions; these dependencies are not installed at runtime.
-- **Project code dependencies** — dependencies declared by the repository after it is cloned. Installed at runtime from locked registries, under the unprivileged container user; the network proxy allow-list limits reachable package registries to those the project requires.
+- **Host-side components** — the launcher script, network proxy sidecar binary, and any host OS libraries they depend on. Mitigations: keep the launcher minimal; pin and audit upstream dependencies of both the launcher and the proxy sidecar; keep the host OS patched.
 
-Residual risk: a malicious version already present in a reviewed lockfile can still execute inside the isolated container; a compromised host-side component operates outside all container isolation guarantees.
+Container-side dependency classes (container/toolchain and project code dependencies) are described in the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md).
+
+Residual risk: a compromised host-side component operates outside all container isolation guarantees.
 
 ### Network exfiltration
 
