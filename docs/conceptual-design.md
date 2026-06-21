@@ -6,13 +6,13 @@ This document establishes its conceptual design: the trust model, threat model, 
 
 The launcher implements the [ADDA SDLC](https://github.com/nightjarrr/molim/blob/main/docs/adda-sdlc.md) — the vendor-agnostic development methodology in which a **feature workflow** is one unit of work: a single GitHub Issue carried out in one AI harness session. The **AI harness** is the program that implements the agentic loop; the **AI agent** is the AI actor that executes inside it and drives the feature workflow. **Subagents** are subordinate agents spawned by the AI agent; they share the parent's container and do not get separate containers or network proxies.
 
+**Audience: human Project Owner only.** Read at setup time and when modifying the environment. Not part of any agent's runtime context.
+
 For the concrete implementation of this design — startup sequence, configuration variables, network allow-list, authentication specifics — see [`docs/technical-design.md`](technical-design.md).
 
 For the contract between the launcher and the container it starts, see [`docs/launcher-container-contract.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md).
 
 For the container-internal architecture — Tier 1/2/3 stack and tier responsibilities — see [`docs/adda-dev-runtime-design.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md) in adda-dev-runtime.
-
-**Audience: human Project Owner only.** Read at setup time and when modifying the environment. Not part of any agent's runtime context.
 
 Throughout, `{owner}` and `{repo}` refer to the GitHub namespace and repository name of the project.
 
@@ -100,7 +100,7 @@ Container isolation reduces likelihood and blast radius; it does not reduce risk
 
 Adversarial content may reach the AI agent's context through web pages, dependency READMEs, Issue bodies, PR comments, fetched files, or repository content.
 
-Mitigations: ephemeral runtime limits persistence and blast radius; narrow GitHub Token scope prevents cross-repository or account-level damage; AI harness permission configuration enforces least privilege; network egress allow-list limits where compromised code can communicate; PR review remains the final human gate for code and workflow changes.
+Launcher-enforced mitigations: ephemeral runtime boundary limits persistence and blast radius; narrow GitHub Token scope prevents cross-repository or account-level damage; network egress allow-list limits where compromised code can communicate. The container contributes complementary mitigations — AI harness permission configuration and PR review as the final human gate — described in the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md).
 
 Residual risk: hostile content may influence changes on the current branch until caught at review.
 
