@@ -38,6 +38,10 @@ The following terms are used consistently throughout this document.
 
 **Feature workflow** — one unit of development work, scoped to a single GitHub Issue, carried out in a single AI harness session.
 
+**Subagent** — a subordinate AI agent process spawned by the AI agent during a session. Subagents share the parent's container and do not get separate containers or network proxies.
+
+**Host keyring** — the OS-native secret store (e.g., macOS Keychain, GNOME Keyring) where authentication tokens are stored encrypted at rest. The launcher reads from it on session start; tokens never touch disk in plaintext.
+
 **Tier architecture** — the layered internal stack of the AI harness container (Tier 1: infrastructure base, Tier 2: ADDA SDLC implementation, Tier 3: the project). Out of scope for this document; see the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md).
 
 ---
@@ -83,7 +87,7 @@ The machine on which the development environment runs. The only fully trusted en
 
 ### Launcher
 
-A host-side program that creates and tears down a single development session. The launcher retrieves credentials from the host keyring, starts the network proxy sidecar, assembles and runs the AI harness container with its required security constraints, and cleans up on exit. The workflow is terminal-first; the launcher creates a plain isolated container — not a Dev Container (a specification that adds host-container IPC sockets and direct IDE tooling integration to a container) — with none of those host connections. It is the only component that can set session parameters. The launcher is a trusted perimeter component.
+A host-side program that creates and tears down a single development session. The launcher retrieves credentials from the host keyring, starts the network proxy sidecar, assembles and runs the AI harness container with its required security constraints, and cleans up on exit. The workflow is terminal-first; the launcher creates a plain isolated container — not a Dev Container (Microsoft's Dev Containers specification, which adds host-container IPC sockets and direct IDE tooling integration to a container) — with none of those host connections. It is the only component that can set session parameters. The launcher is a trusted perimeter component.
 
 ### Network proxy sidecar
 
