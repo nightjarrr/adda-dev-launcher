@@ -67,7 +67,7 @@ A per-session network perimeter proxy started by the launcher. It runs as a sepa
 
 ### AI harness container
 
-The isolated, ephemeral runtime in which the AI agent and all development tooling run. Explicitly treated as untrusted — the launcher gives it no general network access (outbound traffic is routed through the network proxy sidecar) and mounts a read-only root filesystem with writable paths as explicit tmpfs mounts. For the container's internal design, see the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md).
+The isolated, ephemeral runtime in which the AI agent and all development tooling run. Explicitly treated as untrusted — the launcher gives it no general network access (outbound traffic is routed through the network proxy sidecar) and mounts a read-only root filesystem with writable paths as explicit tmpfs mounts. For the container's internal design, see the adda-dev-runtime conceptual design.
 
 ---
 
