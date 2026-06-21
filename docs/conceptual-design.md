@@ -100,17 +100,15 @@ Container isolation reduces likelihood and blast radius; it does not reduce risk
 
 Adversarial content in the agent's context may manipulate its actions within the session.
 
-Launcher-enforced mitigations: ephemeral runtime boundary limits persistence and blast radius; narrow GitHub Token scope prevents cross-repository or account-level damage; network egress allow-list limits where compromised code can communicate. The container contributes complementary mitigations — described in the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md).
+Launcher-enforced mitigations: ephemeral runtime boundary limits persistence and blast radius; narrow GitHub Token scope prevents cross-repository or account-level damage; network egress allow-list limits where compromised code can communicate. The container contributes complementary mitigations — described in the adda-dev-runtime conceptual design.
 
 Residual risk: hostile content may influence changes on the current branch until caught at review.
 
 ### Malicious dependencies
 
-A dependency of the launcher or proxy sidecar may execute hostile code on the host. Because these components run in the trusted perimeter, a compromise here is higher-severity than an in-container compromise.
+A dependency of the launcher or proxy sidecar may execute hostile code on the host. Because these components run in the trusted perimeter, a compromise here is higher-severity than an in-container compromise. The launcher script, network proxy sidecar binary, and any host OS libraries they depend on are the relevant attack surface. Mitigations: keep the launcher minimal; pin and audit upstream dependencies of both the launcher and the proxy sidecar; keep the host OS patched.
 
-- **Host-side components** — the launcher script, network proxy sidecar binary, and any host OS libraries they depend on. Mitigations: keep the launcher minimal; pin and audit upstream dependencies of both the launcher and the proxy sidecar; keep the host OS patched.
-
-Container-side dependency classes (container/toolchain and project code dependencies) are described in the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md).
+Container-side dependency classes are described in the adda-dev-runtime conceptual design.
 
 Residual risk: a compromised host-side component operates outside all container isolation guarantees.
 
