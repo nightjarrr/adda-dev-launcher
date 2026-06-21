@@ -99,7 +99,7 @@ ENVOY_SOCKET_CONTAINER_PATH=/run/adda-dev-proxy/proxy.sock
 9. Render Envoy config from `envoy.yaml.template`, co-located with the launcher script, into the runtime directory.
 10. Start Envoy sidecar container with hardened flags. See *Envoy sidecar*.
 11. Wait for the Envoy Unix socket.
-12. Create `adda-dev shell` and `adda-dev envoy logs` windows in the primary tmux session. The `adda-dev shell` window invokes a container-side script that waits for bootstrap to finish before opening the interactive bash prompt.
+12. Create `adda-dev shell` and `adda-dev envoy logs` windows in the primary tmux session. The `adda-dev shell` window invokes `open-interactive-shell.sh` in the container via `docker exec`, which polls for `/run/.adda_bootstrap_complete` before opening the interactive bash prompt. The container entrypoint guarantees the marker is written in both success and failure scenarios. If `open-interactive-shell.sh` is absent in the container, the interactive shell window fails to open; the main session is unaffected.
 13. Assemble and run the AI harness container. See *Launcher contract* for flags and environment.
 14. On exit, stop Envoy and remove the runtime directory.
 
@@ -278,9 +278,17 @@ This section describes how the launcher satisfies its §1 obligations under the 
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | Hardcoded to `1` |
 | `ADDA_DEV_RUNTIME_IMAGE` | Optional; `adda-dev.env` |
 | `ISSUE_ID` | Optional; command-line argument |
-| Backend credentials | Keyring — see *Authentication* |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Keyring — Anthropic backend; see *Authentication* |
+| `ANTHROPIC_BASE_URL` | DeepSeek backend; `adda-dev.env` |
+| `ANTHROPIC_AUTH_TOKEN` | DeepSeek backend; keyring — see *Authentication* |
+| `ANTHROPIC_MODEL` | DeepSeek backend; `adda-dev.env` |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | DeepSeek backend; `adda-dev.env` |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | DeepSeek backend; `adda-dev.env` |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | DeepSeek backend; `adda-dev.env` |
+| `CLAUDE_CODE_SUBAGENT_MODEL` | DeepSeek backend; `adda-dev.env` |
+| `CLAUDE_CODE_EFFORT_LEVEL` | DeepSeek backend; `adda-dev.env` |
 
-Backend credentials are selected by `ADDA_DEV_LLM_BACKEND`: `CLAUDE_CODE_OAUTH_TOKEN` for the Anthropic backend; `ANTHROPIC_AUTH_TOKEN` and related variables for DeepSeek.
+Backend credentials are selected by `ADDA_DEV_LLM_BACKEND`: `CLAUDE_CODE_OAUTH_TOKEN` for the Anthropic backend; the eight `ANTHROPIC_*` and `CLAUDE_CODE_*` variables above for the DeepSeek backend.
 
 ### §1.2 Filesystem
 
