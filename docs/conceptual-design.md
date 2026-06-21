@@ -1,10 +1,12 @@
 # adda-dev-launcher — Conceptual Design
 
-This document establishes the conceptual design of adda-dev-launcher: the trust model, threat model, session model, and security principles that the launcher enforces. It is a design rationale document — the place to understand *why* the launcher is designed the way it is and what trade-offs it makes.
+**`adda-dev-launcher`** is the host-side launcher for the ADDA Dev Runtime — the program that creates and destroys development sessions, retrieves credentials from the host keyring, and enforces the isolation boundaries described in this document.
 
-For the concrete implementation of this design — entrypoint sequence, configuration variables, network allow-list, authentication specifics — see [`docs/technical-design.md`](technical-design.md) (forthcoming; issue #6).
+This document establishes its conceptual design: the trust model, threat model, session model, and security principles the launcher enforces. It is a design rationale document — the place to understand *why* the launcher is designed the way it is and what trade-offs it makes.
 
-For the contract between the launcher and the container it starts, see [`docs/launcher-container-contract.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md) (currently in adda-dev-runtime; will move here after #7).
+For the concrete implementation of this design — entrypoint sequence, configuration variables, network allow-list, authentication specifics — see [`docs/technical-design.md`](technical-design.md).
+
+For the contract between the launcher and the container it starts, see [`docs/launcher-container-contract.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md).
 
 For the container-internal architecture — Tier 1/2/3 stack and tier responsibilities — see [`docs/adda-dev-runtime-design.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md) in adda-dev-runtime.
 
@@ -16,13 +18,35 @@ Throughout, `{owner}` and `{repo}` refer to the GitHub namespace and repository 
 
 ---
 
+## Terminology and components
+
+The following terms are used consistently throughout this document.
+
+**`adda-dev-launcher`** (this repository) — the host-side launcher program. Creates and destroys development sessions and enforces the isolation boundaries described in this document. The only component of the ADDA Dev Runtime that runs directly on the host.
+
+**ADDA Dev Runtime** — the overall development environment system, comprising the launcher, the network proxy sidecar, and the AI harness container working together as a coordinated session. [`adda-dev-runtime`](https://github.com/nightjarrr/adda-dev-runtime) is the companion repository that owns the container-side implementation.
+
+**AI harness container** — the isolated, ephemeral container in which the AI agent and all development tooling run. Treated as untrusted. See *Components* below and the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md) for the container-internal architecture.
+
+**AI harness / AI agent** — the AI process (Claude Code) running inside the AI harness container. Carries no persistent state across session exits; operates within the constraints the launcher establishes.
+
+**Network proxy sidecar** — a per-session network proxy started by the launcher, running outside the container trust boundary. Enforces the network allow-list for the session.
+
+**ADDA SDLC** — the vendor-agnostic software development lifecycle methodology this runtime implements. See [adda-sdlc.md](https://github.com/nightjarrr/molim/blob/main/docs/adda-sdlc.md).
+
+**Project Owner (PO)** — the human operator who runs the launcher, reviews AI-produced work, and controls the host environment. The audience for this document.
+
+**Feature workflow** — one unit of development work, scoped to a single GitHub Issue, carried out in a single AI harness session.
+
+---
+
 ## Design principles
 
 ### Ephemeral runtime
 
 The launcher creates a runtime for one feature workflow and destroys it on exit. No state persists across container exits; resuming work means the launcher creates a new runtime and the agent rebuilds context from GitHub. This is an intentional and accepted trade-off for isolation and reproducibility.
 
-*Broader design intent:* the ephemeral runtime pairs with a stateless agent and stateful GitHub. The AI agent carries no state across session exits, and GitHub is the persistence layer for all project work — commits, Issues (including hierarchies, cross-links, and comments), Pull Requests and their review trails, and GitHub API state (labels, milestones, phase tracking). The launcher enforces the ephemeral boundary; the stateless-agent and persistent-GitHub patterns are properties of the broader ADDA SDLC design, not launcher responsibilities.
+*Broader design intent:* the ephemeral runtime pairs with a stateless agent and stateful GitHub. The AI agent carries no state across session exits, and GitHub is the persistence layer for all project work — commits, Issues (including hierarchies, cross-links, and comments), Pull Requests and their review trails, and GitHub API state (labels, milestones, phase tracking). The launcher enforces the ephemeral boundary; the stateless-agent and persistent-GitHub patterns are implemented by adda-dev-runtime inside the container, not launcher responsibilities.
 
 ### Defense in depth
 
@@ -30,7 +54,7 @@ The launcher establishes three concentric boundaries that protect the host and p
 
 1. **Container isolation** — the launcher starts the AI harness container with no host filesystem, process, device, display, container engine socket, or network namespace access beyond what it explicitly grants.
 2. **Proxy-based network perimeter** — the launcher starts a per-session network proxy sidecar that enforces a default-deny domain allow-list on all outbound traffic. The proxy runs outside the container trust boundary — running enforcement inside the container would make it defeatable by the untrusted code it protects. Each session gets its own dedicated proxy instance; sessions do not share a proxy.
-3. **AI harness permission configuration** — the launcher supplies the AI harness with a configuration that enforces least privilege when granting permissions to AI actors: agents, skills, and tools.
+3. **AI harness permission configuration** — the third boundary, enforced inside the container: the AI harness applies a least-privilege permission model governing what agents, skills, and tools can do. This boundary is part of the overall defense-in-depth design but is not enforced by the launcher; see the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md) for its implementation.
 
 Two further protections bound the impact of credential exposure:
 
@@ -104,12 +128,13 @@ Residual risk: hostile content may influence changes on the current branch until
 
 ### Malicious dependencies
 
-A dependency may execute hostile code during install, test, build, or runtime. Two dependency classes are distinguished:
+A dependency may execute hostile code during install, test, build, or runtime. Three dependency classes are distinguished:
 
+- **Host-side components** — the launcher script, network proxy sidecar binary, and any host OS libraries they depend on. These run in the trusted perimeter; a compromised host-side component is higher-severity than an in-container compromise because it operates with host-level trust. Mitigations: keep the launcher minimal and auditable; pin the proxy sidecar release; keep the host OS patched.
 - **Container/toolchain dependencies** — OS packages, shell tools, language managers, the AI harness, and other infrastructure baked into the image at build time. Versions are pinned in image definitions; these dependencies are not installed at runtime.
 - **Project code dependencies** — dependencies declared by the repository after it is cloned. Installed at runtime from locked registries, under the unprivileged container user, with only the package-registry access the project requires.
 
-Residual risk: a malicious version already present in a reviewed lockfile can still execute inside the isolated container.
+Residual risk: a malicious version already present in a reviewed lockfile can still execute inside the isolated container; a compromised host-side component operates outside all container isolation guarantees.
 
 ### Network exfiltration
 
