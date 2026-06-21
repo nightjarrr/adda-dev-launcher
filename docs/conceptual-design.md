@@ -6,13 +6,13 @@ This document establishes its conceptual design: the trust model, threat model, 
 
 The launcher implements the [ADDA SDLC](https://github.com/nightjarrr/molim/blob/main/docs/adda-sdlc.md) — the vendor-agnostic development methodology in which a **feature workflow** is one unit of work: a single GitHub Issue carried out in one AI harness session. The **AI harness** is the program that implements the agentic loop; the **AI agent** is the AI actor that executes inside it and drives the feature workflow. **Subagents** are subordinate agents spawned by the AI agent; they share the parent's container and do not get separate containers or network proxies.
 
+**Audience: human Project Owner only.** Read at setup time and when modifying the environment. Not part of any agent's runtime context.
+
 For the concrete implementation of this design — startup sequence, configuration variables, network allow-list, authentication specifics — see [`docs/technical-design.md`](technical-design.md).
 
 For the contract between the launcher and the container it starts, see [`docs/launcher-container-contract.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md).
 
 For the container-internal architecture — Tier 1/2/3 stack and tier responsibilities — see [`docs/adda-dev-runtime-design.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md) in adda-dev-runtime.
-
-**Audience: human Project Owner only.** Read at setup time and when modifying the environment. Not part of any agent's runtime context.
 
 Throughout, `{owner}` and `{repo}` refer to the GitHub namespace and repository name of the project.
 
@@ -67,7 +67,7 @@ A per-session network perimeter proxy started by the launcher. It runs as a sepa
 
 ### AI harness container
 
-The isolated, ephemeral runtime in which the AI agent and all development tooling run. It is explicitly treated as untrusted — nothing running inside it is assumed to be non-exploitable. The launcher constrains the container to no general network access; outbound traffic reaches the internet only through the network proxy sidecar. The launcher mounts a read-only root filesystem with writable paths as explicit tmpfs mounts.
+The isolated, ephemeral runtime in which the AI agent and all development tooling run. Explicitly treated as untrusted — the launcher gives it no general network access (outbound traffic is routed through the network proxy sidecar) and mounts a read-only root filesystem with writable paths as explicit tmpfs mounts. For the container's internal design, see the adda-dev-runtime conceptual design.
 
 ---
 
@@ -98,21 +98,19 @@ Container isolation reduces likelihood and blast radius; it does not reduce risk
 
 ### Prompt injection
 
-Adversarial content may reach the AI agent's context through web pages, dependency READMEs, Issue bodies, PR comments, fetched files, or repository content.
+Adversarial content in the agent's context may manipulate its actions within the session.
 
-Mitigations: ephemeral runtime limits persistence and blast radius; narrow GitHub Token scope prevents cross-repository or account-level damage; AI harness permission configuration enforces least privilege; network egress allow-list limits where compromised code can communicate; PR review remains the final human gate for code and workflow changes.
+Launcher-enforced mitigations: ephemeral runtime boundary limits persistence and blast radius; narrow GitHub Token scope prevents cross-repository or account-level damage; network egress allow-list limits where compromised code can communicate. The container contributes complementary mitigations — described in the adda-dev-runtime conceptual design.
 
 Residual risk: hostile content may influence changes on the current branch until caught at review.
 
 ### Malicious dependencies
 
-A dependency may execute hostile code during install, test, build, or runtime. Three dependency classes are distinguished:
+A dependency of the launcher or proxy sidecar may execute hostile code on the host. Because these components run in the trusted perimeter, a compromise here is higher-severity than an in-container compromise. The launcher script, network proxy sidecar binary, and any host OS libraries they depend on are the relevant attack surface. Mitigations: keep the launcher minimal; pin and audit upstream dependencies of both the launcher and the proxy sidecar; keep the host OS patched.
 
-- **Host-side components** — the launcher script, network proxy sidecar binary, and any host OS libraries they depend on. These run in the trusted perimeter; a compromised host-side component is higher-severity than an in-container compromise because it operates with host-level trust. Mitigations: keep the launcher minimal; pin and audit upstream dependencies of both the launcher and the proxy sidecar; keep the host OS patched.
-- **Container/toolchain dependencies** — OS packages, shell tools, language managers, the AI harness, and other infrastructure baked into the image at build time. Versions are pinned in image definitions; these dependencies are not installed at runtime.
-- **Project code dependencies** — dependencies declared by the repository after it is cloned. Installed at runtime from locked registries, under the unprivileged container user; the network proxy allow-list limits reachable package registries to those the project requires.
+Container-side dependency classes are described in the adda-dev-runtime conceptual design.
 
-Residual risk: a malicious version already present in a reviewed lockfile can still execute inside the isolated container; a compromised host-side component operates outside all container isolation guarantees.
+Residual risk: a compromised host-side component operates outside all container isolation guarantees.
 
 ### Network exfiltration
 
