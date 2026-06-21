@@ -4,7 +4,7 @@
 
 This document establishes its conceptual design: the trust model, threat model, session model, and security principles the launcher enforces. It is a design rationale document — the place to understand *why* the launcher is designed the way it is and what trade-offs it makes.
 
-For the concrete implementation of this design — entrypoint sequence, configuration variables, network allow-list, authentication specifics — see [`docs/technical-design.md`](technical-design.md).
+For the concrete implementation of this design — startup sequence, configuration variables, network allow-list, authentication specifics — see [`docs/technical-design.md`](technical-design.md).
 
 For the contract between the launcher and the container it starts, see [`docs/launcher-container-contract.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md).
 
