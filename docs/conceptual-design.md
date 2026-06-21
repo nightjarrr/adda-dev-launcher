@@ -1,8 +1,10 @@
 # adda-dev-launcher — Conceptual Design
 
-**`adda-dev-launcher`** is the host-side launcher for the ADDA Dev Runtime — the program that creates and destroys development sessions, retrieves credentials from the host keyring, and enforces the isolation boundaries described in this document.
+**`adda-dev-launcher`** is the host-side launcher for the **ADDA Dev Runtime** — the overall development environment system comprising the launcher, the network proxy sidecar, and the AI harness container working together as a coordinated session. The launcher creates and destroys sessions, retrieves credentials from the host keyring, and enforces the isolation boundaries described in this document. [`adda-dev-runtime`](https://github.com/nightjarrr/adda-dev-runtime) is the companion repository that owns the container-side implementation.
 
 This document establishes its conceptual design: the trust model, threat model, session model, and security principles the launcher enforces. It is a design rationale document — the place to understand *why* the launcher is designed the way it is and what trade-offs it makes.
+
+The launcher implements the [ADDA SDLC](https://github.com/nightjarrr/molim/blob/main/docs/adda-sdlc.md) — the vendor-agnostic development methodology in which a **feature workflow** is one unit of work: a single GitHub Issue carried out in one AI harness session. The **AI harness** is the program that implements the agentic loop; the **AI agent** is the AI actor that executes inside it and drives the feature workflow. **Subagents** are subordinate agents spawned by the AI agent; they share the parent's container and do not get separate containers or network proxies.
 
 For the concrete implementation of this design — startup sequence, configuration variables, network allow-list, authentication specifics — see [`docs/technical-design.md`](technical-design.md).
 
@@ -10,23 +12,9 @@ For the contract between the launcher and the container it starts, see [`docs/la
 
 For the container-internal architecture — Tier 1/2/3 stack and tier responsibilities — see [`docs/adda-dev-runtime-design.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md) in adda-dev-runtime.
 
-Companion to [adda-sdlc.md](https://github.com/nightjarrr/molim/blob/main/docs/adda-sdlc.md) — the vendor-agnostic conceptual design of the ADDA SDLC that this runtime implements.
-
 **Audience: human Project Owner only.** Read at setup time and when modifying the environment. Not part of any agent's runtime context.
 
 Throughout, `{owner}` and `{repo}` refer to the GitHub namespace and repository name of the project.
-
----
-
-## Terminology
-
-The following cross-cutting concepts and actors are used throughout this document.
-
-**ADDA Dev Runtime** — the overall development environment system: `adda-dev-launcher`, the network proxy sidecar, and the AI harness container working together as a coordinated session. This document covers the host-side design; [`adda-dev-runtime`](https://github.com/nightjarrr/adda-dev-runtime) is the companion repository that owns the container-side implementation.
-
-**ADDA SDLC and feature workflow** — the ADDA SDLC (see [adda-sdlc.md](https://github.com/nightjarrr/molim/blob/main/docs/adda-sdlc.md)) is the vendor-agnostic development methodology this runtime implements. A feature workflow is one unit of work within it: a single GitHub Issue carried out in one AI harness session.
-
-**AI harness, AI agent, and subagents** — the AI harness is the program that implements the agentic loop; the AI agent is the AI actor that executes inside the AI harness and drives the feature workflow according to the SDLC. Subagents are subordinate agents spawned by the AI agent during a session; they share the parent's container and do not get separate containers or network proxies.
 
 ---
 
