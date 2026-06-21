@@ -283,8 +283,6 @@ Backend credentials are selected by `ADDA_DEV_LLM_BACKEND`: `CLAUDE_CODE_OAUTH_T
 
 ### §1.2 Filesystem
 
-The runtime user is configured in `adda-dev.env` via `ADDA_DEV_USER`, `ADDA_DEV_UID`, and `ADDA_DEV_GID` (defaults: `adda`, `1000`, `1000`). All tmpfs mounts are owned by that UID/GID.
-
 | Mount | Launcher implementation |
 |---|---|
 | `/home/${ADDA_DEV_USER}` | tmpfs, mode `0700`, exec; size: `ADDA_DEV_HOME_TMPFS_SIZE` (default `500m`) |
@@ -297,8 +295,11 @@ Tmpfs sizes are limits, not pre-allocated RAM reservations. Docker also provides
 
 ### §1.3 Hardening
 
+The AI harness container is launched with the following `docker run` flags:
+
 | Flag | Effect |
 |---|---|
+| `--user ${ADDA_DEV_UID}:${ADDA_DEV_GID}` | Runs as the configured non-root user (default `1000:1000`, `adda`); tmpfs mounts in §1.2 are owned by this UID/GID. |
 | `--cap-drop ALL` | No effective capabilities; network enforcement stays outside the container via the sidecar. |
 | `--security-opt no-new-privileges` | No privilege escalation via setuid or setgid binaries. |
 | `--read-only` | Root filesystem read-only; writable paths are the explicit tmpfs mounts in §1.2. |
