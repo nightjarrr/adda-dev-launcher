@@ -74,8 +74,9 @@ ADDA_DEV_IMAGE=
 ADDA_DEV_USER=adda
 ADDA_DEV_UID=1000
 ADDA_DEV_GID=1000
-ADDA_DEV_HOME_TMPFS_SIZE=500m
-ADDA_DEV_WORKSPACE_TMPFS_SIZE=200m
+ADDA_DEV_HOME_TMPFS_SIZE=512m
+ADDA_DEV_WORKSPACE_TMPFS_SIZE=256m
+ADDA_DEV_TMP_TMPFS_SIZE=256m
 # Needs to be a file directly in /run to support the /run tmpfs
 ADDA_DEV_PROXY_SOCKET_CONTAINER_PATH=/run/proxy.sock
 ADDA_DEV_PROXY_PORT=8080
@@ -283,12 +284,14 @@ Backend credentials are selected by `ADDA_DEV_LLM_BACKEND`: `CLAUDE_CODE_OAUTH_T
 
 ### §1.2 Filesystem
 
+All tmpfs mounts include `uid=${ADDA_DEV_UID},gid=${ADDA_DEV_GID}` mount options (default `1000:1000`); this is how the container runtime user owns the writable paths. The launcher does not pass `--user` for the AI harness container — the image's `USER` directive sets the process user.
+
 | Mount | Launcher implementation |
 |---|---|
-| `/home/${ADDA_DEV_USER}` | tmpfs, mode `0700`, exec; size: `ADDA_DEV_HOME_TMPFS_SIZE` (default `500m`) |
-| `/workspace` | tmpfs, mode `0700`, exec; size: `ADDA_DEV_WORKSPACE_TMPFS_SIZE` (default `200m`) |
-| `/tmp` | tmpfs, mode `0700`, exec |
-| `/run` | tmpfs, mode `0700`, noexec |
+| `/home/${ADDA_DEV_USER}` | tmpfs, mode `0700`, exec; size: `ADDA_DEV_HOME_TMPFS_SIZE` (default `512m`) |
+| `/workspace` | tmpfs, mode `0700`, exec; size: `ADDA_DEV_WORKSPACE_TMPFS_SIZE` (default `256m`) |
+| `/tmp` | tmpfs, mode `0700`, exec; size: `ADDA_DEV_TMP_TMPFS_SIZE` (default `256m`) |
+| `/run` | tmpfs, mode `0700`, noexec; hardcoded `32m` |
 | Proxy socket (`ADDA_DEV_PROXY_SOCKET`) | Bind-mounted as an immediate child of `/run` (e.g. `/run/proxy.sock`), avoiding nested parent directories under the `/run` tmpfs. Socket permissions must allow the container runtime user to connect despite possible UID/GID mismatch between host user, Envoy sidecar process, and container user. |
 
 Tmpfs sizes are limits, not pre-allocated RAM reservations. Docker also provides managed files (`/etc/hosts`, `/etc/hostname`, `/etc/resolv.conf`) as expected runtime configuration; these do not provide network access.
@@ -299,7 +302,6 @@ The AI harness container is launched with the following `docker run` flags:
 
 | Flag | Effect |
 |---|---|
-| `--user ${ADDA_DEV_UID}:${ADDA_DEV_GID}` | Runs as the configured non-root user (default `1000:1000`, `adda`); tmpfs mounts in §1.2 are owned by this UID/GID. |
 | `--cap-drop ALL` | No effective capabilities; network enforcement stays outside the container via the sidecar. |
 | `--security-opt no-new-privileges` | No privilege escalation via setuid or setgid binaries. |
 | `--read-only` | Root filesystem read-only; writable paths are the explicit tmpfs mounts in §1.2. |
