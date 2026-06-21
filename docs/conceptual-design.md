@@ -28,8 +28,6 @@ The following cross-cutting concepts and actors are used throughout this documen
 
 **AI harness, AI agent, and subagents** — the AI harness is the program that implements the agentic loop; the AI agent is the AI actor that executes inside the AI harness and drives the feature workflow according to the SDLC. Subagents are subordinate agents spawned by the AI agent during a session; they share the parent's container and do not get separate containers or network proxies.
 
-**Project Owner (PO)** — the human operator who runs the launcher, reviews AI-produced work, and controls the host environment.
-
 ---
 
 ## Design principles
