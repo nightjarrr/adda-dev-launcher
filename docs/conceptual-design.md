@@ -1,6 +1,6 @@
 # adda-dev-launcher — Conceptual Design
 
-**`adda-dev-launcher`** is the host-side launcher for the **ADDA Dev Runtime** — the overall development environment system comprising the launcher, the network proxy sidecar, and the AI harness container working together as a coordinated session. The launcher creates and destroys sessions, retrieves credentials from the host keyring, and enforces the isolation boundaries described in this document. [`adda-dev-runtime`](https://github.com/nightjarrr/adda-dev-runtime) is the companion repository that owns the container-side implementation.
+**`adda-dev-launcher`** is the host-side launcher for the **ADDA Dev Runtime** (ADDA: Agentic Development with Durable Artifacts) — the overall development environment system comprising the launcher, the network proxy sidecar, and the AI harness container working together as a coordinated session. The launcher creates and destroys sessions, retrieves credentials from the host keyring, and enforces the isolation boundaries described in this document. [`adda-dev-runtime`](https://github.com/nightjarrr/adda-dev-runtime) is the companion repository that owns the container-side implementation.
 
 This document establishes its conceptual design: the trust model, threat model, session model, and security principles the launcher enforces. It is a design rationale document — the place to understand *why* the launcher is designed the way it is and what trade-offs it makes.
 
@@ -122,7 +122,7 @@ Primary mitigation: the launcher gives the container no network interface beyond
 
 ### Token theft
 
-The container must hold credentials to function. Mitigations: the launcher supplies a GitHub Token scoped to a single repository with no administration permissions; the AI vendor token is revocable; exfiltration routes are constrained by the network allow-list; the launcher never stores tokens in plaintext on host disk.
+The container must hold credentials to function. Mitigations: the launcher supplies a GitHub Token scoped to a single repository with no administration permissions; the AI vendor token (the credential the AI harness uses to call the AI provider's API) is revocable; exfiltration routes are constrained by the network allow-list; the launcher never stores tokens in plaintext on host disk.
 
 Accepted residual risk: an attacker in a live session can use available credentials within their granted scope until the session is terminated or tokens are revoked.
 
@@ -148,7 +148,7 @@ Subagents run inside the parent AI harness process and share its container. They
 
 Multiple features may run concurrently. Each session is fully isolated from others, sharing no state except through GitHub.
 
-The launcher creates a session when work begins and destroys it when the session exits. Resuming work means the launcher creates a new runtime; state is reloaded from GitHub.
+The launcher creates a session when work begins and destroys it when the session exits — the host terminal running the launcher is the session boundary. Resuming work means the launcher creates a new runtime; state is reloaded from GitHub.
 
 ---
 
