@@ -18,31 +18,17 @@ Throughout, `{owner}` and `{repo}` refer to the GitHub namespace and repository 
 
 ---
 
-## Terminology and components
+## Terminology
 
-The following terms are used consistently throughout this document.
+The following cross-cutting concepts and actors are used throughout this document.
 
-**`adda-dev-launcher`** (this repository) — the host-side launcher program. Creates and destroys development sessions and enforces the isolation boundaries described in this document. The only component of the ADDA Dev Runtime that runs directly on the host.
+**ADDA Dev Runtime** — the overall development environment system: `adda-dev-launcher`, the network proxy sidecar, and the AI harness container working together as a coordinated session. This document covers the host-side design; [`adda-dev-runtime`](https://github.com/nightjarrr/adda-dev-runtime) is the companion repository that owns the container-side implementation.
 
-**ADDA Dev Runtime** — the overall development environment system, comprising the launcher, the network proxy sidecar, and the AI harness container working together as a coordinated session. [`adda-dev-runtime`](https://github.com/nightjarrr/adda-dev-runtime) is the companion repository that owns the container-side implementation.
+**ADDA SDLC and feature workflow** — the ADDA SDLC (see [adda-sdlc.md](https://github.com/nightjarrr/molim/blob/main/docs/adda-sdlc.md)) is the vendor-agnostic development methodology this runtime implements. A feature workflow is one unit of work within it: a single GitHub Issue carried out in one AI harness session.
 
-**AI harness container** — the isolated, ephemeral container in which the AI agent and all development tooling run. Treated as untrusted. See *Components* below and the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md) for the container-internal architecture.
-
-**AI harness / AI agent** — the AI process (Claude Code) running inside the AI harness container. Carries no persistent state across session exits; operates within the constraints the launcher establishes.
-
-**Network proxy sidecar** — a per-session network proxy started by the launcher, running outside the container trust boundary. Enforces the network allow-list for the session.
-
-**ADDA SDLC** — the vendor-agnostic software development lifecycle methodology this runtime implements. See [adda-sdlc.md](https://github.com/nightjarrr/molim/blob/main/docs/adda-sdlc.md).
+**AI harness, AI agent, and subagents** — the AI harness (Claude Code) is the AI process running inside the AI harness container; "AI agent" and "AI harness" are used interchangeably. Subagents are subordinate agents spawned by the AI agent during a session; they share the parent's container and do not get separate containers or network proxies.
 
 **Project Owner (PO)** — the human operator who runs the launcher, reviews AI-produced work, and controls the host environment. The audience for this document.
-
-**Feature workflow** — one unit of development work, scoped to a single GitHub Issue, carried out in a single AI harness session.
-
-**Subagent** — a subordinate AI agent process spawned by the AI agent during a session. Subagents share the parent's container and do not get separate containers or network proxies.
-
-**Host keyring** — the OS-native secret store (e.g., macOS Keychain, GNOME Keyring) where authentication tokens are stored encrypted at rest. The launcher reads from it on session start; tokens never touch disk in plaintext.
-
-**Tier architecture** — the layered internal stack of the AI harness container (Tier 1: infrastructure base, Tier 2: ADDA SDLC implementation, Tier 3: the project). Out of scope for this document; see the [adda-dev-runtime conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md).
 
 ---
 
@@ -64,7 +50,7 @@ The launcher establishes three concentric boundaries that protect the host and p
 
 Two further protections bound the impact of credential exposure:
 
-- **Host-side keyring** — the launcher retrieves authentication tokens from the host keyring on demand; tokens never reside in plaintext on host disk.
+- **Host-side keyring** — the launcher retrieves authentication tokens from the host keyring (the OS-native secret store, e.g., macOS Keychain or GNOME Keyring) on demand; tokens never reside in plaintext on host disk.
 - **Token scoping** — the GitHub Token the launcher supplies is scoped to a single repository with no administration permissions, bounding GitHub blast radius.
 
 ### Host launcher and network proxy are trusted perimeter components
