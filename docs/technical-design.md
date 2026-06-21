@@ -99,7 +99,7 @@ ENVOY_SOCKET_CONTAINER_PATH=/run/adda-dev-proxy/proxy.sock
 10. Start Envoy sidecar container with hardened flags. See *Envoy sidecar*.
 11. Wait for the Envoy Unix socket.
 12. Create `adda-dev shell` and `adda-dev envoy logs` windows in the primary tmux session. The `adda-dev shell` window invokes a container-side script that waits for bootstrap to finish before opening the interactive bash prompt.
-13. Assemble and run the AI harness container. See *Filesystem and process hardening* for flags and *Network* for proxy wiring.
+13. Assemble and run the AI harness container. See *Launcher contract* for flags and environment.
 14. On exit, stop Envoy and remove the runtime directory.
 
 ### tmux and terminal emulator
@@ -140,39 +140,7 @@ The admin interface is for diagnostics only. It is not a policy editing UI and m
 
 ## Network
 
-The host-side network story spans the launcher (starts Envoy) and the Envoy sidecar (enforces policy). The in-container side — the `socat` proxy bridge started by the entrypoint and the proxy environment variables it exports — is described in [adda-dev-runtime technical design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-technical-design.md). This section covers the host-side setup and the full proxy picture needed to understand how the sidecar socket is used by the container.
-
-### Container networking
-
-The AI harness container is launched with `--network none`.
-
-Expected properties inside the container:
-* Only loopback is available.
-* There is no default route.
-* Direct DNS resolution to internet resolvers is unavailable.
-* Direct TCP connections to internet IPs fail.
-* Tools that ignore proxy settings fail to reach the network.
-
-### Proxy bridge
-
-Most applications understand HTTP proxies as `host:port`, not Unix sockets. The entrypoint starts a `socat` bridge inside the container:
-
-```text
-127.0.0.1:<ADDA_DEV_PROXY_PORT>  ->  <ADDA_DEV_PROXY_SOCKET>
-```
-
-The entrypoint then exports:
-
-```bash
-HTTP_PROXY=http://127.0.0.1:<port>
-HTTPS_PROXY=http://127.0.0.1:<port>
-http_proxy=http://127.0.0.1:<port>
-https_proxy=http://127.0.0.1:<port>
-NO_PROXY=localhost,127.0.0.1,::1
-no_proxy=localhost,127.0.0.1,::1
-```
-
-For HTTPS destinations, clients send HTTP `CONNECT` to Envoy. Envoy sees the target authority (e.g. `api.github.com:443`) but does not decrypt TLS in the baseline design.
+This section describes Envoy sidecar network policy. The `--network none` isolation flag is described in *Launcher contract §1.3 Hardening*. The in-container proxy bridge started by the entrypoint is described in the adda-dev-runtime technical design.
 
 ### Envoy policy
 
@@ -187,9 +155,11 @@ Default-deny is achieved via Envoy RBAC `action: ALLOW` — no explicit wildcard
 
 Policy match basis is `:authority`. For HTTPS `CONNECT`, authority is `host:port` (e.g. `api.github.com:443`); for plain HTTP, authority may be `host` or `host:port` — allow-list entries must account for both forms.
 
+For HTTPS destinations, clients send HTTP `CONNECT` to Envoy. Envoy sees the target authority (e.g. `api.github.com:443`) but does not decrypt TLS in the baseline design.
+
 ### DNS
 
-The AI harness container does not resolve internet destinations for proxied traffic — it only connects to loopback. Envoy receives the requested authority from the explicit proxy request and resolves allowed destinations from the sidecar container. Policy is applied before DNS resolution and before upstream connection.
+Envoy receives the requested authority from the explicit proxy request and resolves allowed destinations from the sidecar container. Policy is applied before DNS resolution and before upstream connection.
 
 ### Allow-list
 
@@ -220,7 +190,6 @@ Runtime package-registry access:
 Target-state behavior:
 * If Envoy cannot start, the launcher fails before starting the AI harness container.
 * If the Unix socket does not appear, the launcher fails.
-* If the in-container socat bridge cannot start, the entrypoint fails.
 * If a request does not match the allow-list, Envoy denies it.
 * If a process bypasses proxy configuration, it has no network path due to `--network none`.
 
@@ -290,75 +259,47 @@ Grey-area permissions are added only when a named SDLC operation requires them a
 
 ---
 
-## Filesystem and process hardening
+## Launcher contract
 
-### Container process privileges
+This section describes how the launcher satisfies its §1 obligations under the [launcher–container contract](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md). The contract specifies what the container checks and at what enforcement level; what follows is how the launcher produces it.
 
-The AI harness container is launched with:
+### §1.1 Environment
 
-```bash
---cap-drop ALL
---security-opt no-new-privileges
-```
+| Contract variable | Source |
+|---|---|
+| `GITHUB_OWNER` | `adda-dev.env` |
+| `GITHUB_REPO` | `adda-dev.env` |
+| `GITHUB_TOKEN_` | Keyring — see *Authentication* |
+| `TZ` | Detected at runtime (step 7) |
+| `ADDA_DEV_PROXY_SOCKET` | `adda-dev.env`: `ADDA_DEV_PROXY_SOCKET_CONTAINER_PATH` |
+| `ADDA_DEV_PROXY_PORT` | `adda-dev.env` |
+| `ADDA_DEV_LLM_BACKEND` | `adda-dev.env` |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | Hardcoded to `1` |
+| `ADDA_DEV_RUNTIME_IMAGE` | Optional; `adda-dev.env` |
+| `ISSUE_ID` | Optional; command-line argument |
+| Backend credentials | Keyring — see *Authentication* |
 
-Expected runtime diagnostics:
+Backend credentials are selected by `ADDA_DEV_LLM_BACKEND`: `CLAUDE_CODE_OAUTH_TOKEN` for the Anthropic backend; `ANTHROPIC_AUTH_TOKEN` and related variables for DeepSeek.
 
-```text
-CapEff:        0000000000000000
-NoNewPrivs:    1
-```
+### §1.2 Filesystem
 
-No capability is added back for firewall or network configuration. Network enforcement is outside the container.
+The runtime user is configured in `adda-dev.env` via `ADDA_DEV_USER`, `ADDA_DEV_UID`, and `ADDA_DEV_GID` (defaults: `adda`, `1000`, `1000`). All tmpfs mounts are owned by that UID/GID.
 
-### Read-only root filesystem
+| Mount | Launcher implementation |
+|---|---|
+| `/home/${ADDA_DEV_USER}` | tmpfs, mode `0700`, exec; size: `ADDA_DEV_HOME_TMPFS_SIZE` (default `500m`) |
+| `/workspace` | tmpfs, mode `0700`, exec; size: `ADDA_DEV_WORKSPACE_TMPFS_SIZE` (default `200m`) |
+| `/tmp` | tmpfs, mode `0700`, exec |
+| `/run` | tmpfs, mode `0700`, noexec |
+| Proxy socket (`ADDA_DEV_PROXY_SOCKET`) | Bind-mounted as an immediate child of `/run` (e.g. `/run/proxy.sock`), avoiding nested parent directories under the `/run` tmpfs. Socket permissions must allow the container runtime user to connect despite possible UID/GID mismatch between host user, Envoy sidecar process, and container user. |
 
-The AI harness container root filesystem is read-only:
+Tmpfs sizes are limits, not pre-allocated RAM reservations. Docker also provides managed files (`/etc/hosts`, `/etc/hostname`, `/etc/resolv.conf`) as expected runtime configuration; these do not provide network access.
 
-```bash
-docker run --read-only
-```
+### §1.3 Hardening
 
-Writable paths are explicit tmpfs mounts. The design assumes a single effective runtime user inside the container. Writable mounts are owned by that runtime UID/GID and are private by default.
-
-### Runtime user configuration
-
-Defined in the launcher/project configuration:
-
-```bash
-ADDA_DEV_USER=adda
-ADDA_DEV_UID=1000
-ADDA_DEV_GID=1000
-ADDA_DEV_HOME=/home/adda
-```
-
-The image must run as that user, or the entrypoint should warn that runtime UID/GID do not match the expected configuration.
-
-### Writable tmpfs mounts
-
-| Path | Mode | Exec? | Purpose |
-|---|---|---|---|
-| `/home/${ADDA_DEV_USER}` | `0700` | yes | AI harness state, gh config, git config, runtime state, shell config. |
-| `/workspace` | `0700` | yes | Repository checkout, project writes, test/build output. |
-| `/tmp` | `0700` | yes | Temporary files; exec permitted for tools that create and run temp scripts. |
-| `/run` | `0700` | no | Runtime files and mounted proxy socket. |
-
-`$HOME` and `/workspace` must permit execution because language tooling may install executable interpreters, virtualenvs, or scripts there. `/run` should be `noexec`; it exists for runtime/socket files.
-
-Tmpfs sizes are configured by launcher variables:
-
-```bash
-ADDA_DEV_HOME_TMPFS_SIZE=500m
-ADDA_DEV_WORKSPACE_TMPFS_SIZE=200m
-```
-
-Sizes are limits, not pre-allocated RAM reservations.
-
-### Proxy socket mount
-
-The Envoy Unix socket is bind-mounted into the container as an immediate child of `/run` (e.g. `/run/proxy.sock`). This avoids relying on nested parent directories under a tmpfs-mounted `/run`.
-
-Socket permissions must allow the container runtime user to connect despite possible UID/GID mismatch between host user, Envoy sidecar process, and container user.
-
-### Expected Docker-managed mounts
-
-Docker provides managed files (`/etc/hosts`, `/etc/hostname`, `/etc/resolv.conf`). These do not by themselves provide network access and should be treated as expected Docker runtime configuration unless they contain unexpected content.
+| Flag | Effect |
+|---|---|
+| `--cap-drop ALL` | No effective capabilities; network enforcement stays outside the container via the sidecar. |
+| `--security-opt no-new-privileges` | No privilege escalation via setuid or setgid binaries. |
+| `--read-only` | Root filesystem read-only; writable paths are the explicit tmpfs mounts in §1.2. |
+| `--network none` | No network interfaces except loopback; all outbound traffic must route through the sidecar proxy socket. |
