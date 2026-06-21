@@ -150,13 +150,13 @@ Primary mitigation: the launcher gives the container no network interface beyond
 
 ### Token theft
 
-The container must hold credentials to function. Mitigations: the launcher supplies a GitHub Token scoped to a single repository with no administration permissions; the AI harness token is revocable; exfiltration routes are constrained by the network allow-list; the launcher never stores tokens in plaintext on host disk.
+The container must hold credentials to function. Mitigations: the launcher supplies a GitHub Token scoped to a single repository with no administration permissions; the AI vendor token is revocable; exfiltration routes are constrained by the network allow-list; the launcher never stores tokens in plaintext on host disk.
 
 Accepted residual risk: an attacker in a live session can use available credentials within their granted scope until the session is terminated or tokens are revoked.
 
 ### Quota and resource abuse
 
-A runaway AI agent session or hostile instruction may consume API quota, GitHub API rate limits, or host CPU and memory. Mitigations: the launcher's ephemeral container teardown stops further consumption; in-memory filesystem sizes bound writable storage growth; GitHub API rate limits apply naturally.
+A runaway AI agent session or hostile instruction may consume API quota, GitHub API rate limits, or host CPU and memory. Mitigations: the launcher's ephemeral container teardown stops further consumption; GitHub API rate limits apply naturally.
 
 ---
 
