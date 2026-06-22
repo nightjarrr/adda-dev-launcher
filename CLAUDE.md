@@ -10,12 +10,12 @@ The launcher is a Bash script that:
 3. Starts the ADDA Dev Runtime container with the correct mounts, environment, and network configuration.
 4. Optionally starts an Envoy proxy sidecar (using `envoy.yaml.template`).
 
-The launcher code and its companion templates live in the `launcher/` directory, imported from `adda-dev-runtime` with full git history via #9.
+The launcher code and its companion templates live in the `launcher/` directory.
 
 ## Repo layout
 
 ```
-launcher/                # host-side launcher files (imported from adda-dev-runtime via #9)
+launcher/                # host-side launcher files
   adda-dev.sh            # launcher entry-point script
   adda-dev.env.example   # example environment configuration
   envoy.yaml.template    # Envoy proxy sidecar template
