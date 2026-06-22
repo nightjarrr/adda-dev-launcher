@@ -34,4 +34,4 @@ docs/conventions.md      # coding conventions for this repo
 ## References
 
 - `docs/conventions.md` — Bash style conventions for this project.
-- `https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md` — authoritative host-container contract.
+- `docs/launcher-container-contract.md` — authoritative host-container contract.
