@@ -10,15 +10,16 @@ The launcher is a Bash script that:
 3. Starts the ADDA Dev Runtime container with the correct mounts, environment, and network configuration.
 4. Optionally starts an Envoy proxy sidecar (using `envoy.yaml.template`).
 
-The launcher code (`adda-dev.sh`) and its companion templates (`envoy.yaml.template`, `adda-dev.tmux.conf`, `adda-dev.env.example`) are being imported from `adda-dev-runtime` in issue #404. This file and the SDLC scaffolding are intentionally forward-looking.
+The launcher code and its companion templates live in the `launcher/` directory.
 
 ## Repo layout
 
 ```
-adda-dev.sh              # host-side launcher script (arrives via #404)
-adda-dev.env.example     # example environment configuration (arrives via #404)
-envoy.yaml.template      # Envoy proxy template (arrives via #404)
-adda-dev.tmux.conf       # tmux session config (arrives via #404)
+launcher/                # host-side launcher files
+  adda-dev.sh            # launcher entry-point script
+  adda-dev.env.example   # example environment configuration
+  envoy.yaml.template    # Envoy proxy sidecar template
+  adda-dev.tmux.conf     # tmux session configuration
 .adda-init.sh            # repo-level init hook (installs pre-commit hook)
 .quality-gates.toml      # local quality gate definitions
 docs/conventions.md      # coding conventions for this repo
