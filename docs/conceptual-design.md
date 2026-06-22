@@ -10,7 +10,7 @@ The launcher implements the [ADDA SDLC](https://github.com/nightjarrr/molim/blob
 
 For the concrete implementation of this design — startup sequence, configuration variables, network allow-list, authentication specifics — see [`docs/technical-design.md`](technical-design.md).
 
-For the contract between the launcher and the container it starts, see [`docs/launcher-container-contract.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md).
+For the contract between the launcher and the container it starts, see [`docs/launcher-container-contract.md`](launcher-container-contract.md).
 
 For the container-internal architecture — Tier 1/2/3 stack and tier responsibilities — see [`docs/adda-dev-runtime-design.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md) in adda-dev-runtime.
 

@@ -4,7 +4,7 @@ This document is the technical complement to [`docs/conceptual-design.md`](conce
 
 **Audience: human Project Owner only.** Read when setting up, extending, or debugging the launcher or network policy. Not part of any agent's runtime context.
 
-For the contract between the launcher and the container it starts, see [`docs/launcher-container-contract.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md).
+For the contract between the launcher and the container it starts, see [`docs/launcher-container-contract.md`](launcher-container-contract.md).
 
 For the container-internal implementation — entrypoint sequence, bootstrap extension points, image build pipeline — see [`docs/adda-dev-runtime-technical-design.md`](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-technical-design.md) in adda-dev-runtime.
 
@@ -262,7 +262,7 @@ Grey-area permissions are added only when a named SDLC operation requires them a
 
 ## Launcher contract
 
-This section describes how the launcher satisfies its §1 obligations under the [launcher–container contract](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/launcher-container-contract.md). The contract specifies what the container checks and at what enforcement level; what follows is how the launcher produces it.
+This section describes how the launcher satisfies its §1 obligations under the [launcher–container contract](launcher-container-contract.md). The contract specifies what the container checks and at what enforcement level; what follows is how the launcher produces it.
 
 ### §1.1 Environment
 
