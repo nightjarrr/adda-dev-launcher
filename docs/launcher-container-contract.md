@@ -2,7 +2,17 @@
 
 **Contract version:** 0.1.0
 
-This specification defines the runtime interface between the host **launcher** and the AI harness **container** it runs. It governs only what crosses that boundary and is relied upon by the other side. For system goals and rationale, see the [conceptual design](adda-dev-runtime-design.md) and [technical design](adda-dev-runtime-technical-design.md).
+This specification defines the runtime interface between the host **launcher** and the AI harness **container** it runs. It governs only what crosses that boundary and is relied upon by the other side.
+
+For system goals and rationale:
+
+**Launcher:**
+- [Conceptual design](conceptual-design.md)
+- [Technical design](technical-design.md)
+
+**Runtime:**
+- [Conceptual design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-design.md)
+- [Technical design](https://github.com/nightjarrr/adda-dev-runtime/blob/main/docs/adda-dev-runtime-technical-design.md)
 
 The key words MUST, MUST NOT, SHALL, SHOULD, and MAY are to be interpreted as described in RFC 2119.
 
