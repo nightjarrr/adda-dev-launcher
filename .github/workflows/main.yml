@@ -1,0 +1,63 @@
+name: Main
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  gate:
+    uses: ./.github/workflows/base.yml
+
+  docker:
+    needs: gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect Dockerfile changes
+        id: dockerfile_changed
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            if git diff HEAD~1 HEAD -- Dockerfile | grep -q .; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to GHCR
+        if: steps.dockerfile_changed.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        if: steps.dockerfile_changed.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        if: steps.dockerfile_changed.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/nightjarrr/adda-dev-launcher:edge
+          cache-from: type=registry,ref=ghcr.io/nightjarrr/adda-dev-launcher:buildcache
+          cache-to: type=registry,ref=ghcr.io/nightjarrr/adda-dev-launcher:buildcache,mode=max
