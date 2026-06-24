@@ -4,23 +4,32 @@ This is the host-side launcher for the ADDA Dev Runtime. It runs on the host mac
 
 ## Project overview
 
-The launcher is a Bash script that:
-1. Reads `adda-dev.env` for project and runtime configuration.
-2. Retrieves secrets from the host keyring.
-3. Starts the ADDA Dev Runtime container with the correct mounts, environment, and network configuration.
-4. Optionally starts an Envoy proxy sidecar (using `envoy.yaml.template`).
+The launcher is being redesigned in Python under issue #52. The Bash script in `launcher/` remains the active launcher until the Python redesign is complete.
+
+The Python package (`adda-dev`) provides a CLI entry point that will replace the Bash launcher. Its source lives in `src/adda_dev/`.
 
 The launcher code and its companion templates live in the `launcher/` directory.
 
 ## Repo layout
 
 ```
-launcher/                # host-side launcher files
+src/adda_dev/            # Python package source
+  __init__.py            # package root
+  cli.py                 # Typer CLI entry point
+  data/                  # bundled data files
+    envoy.yaml.template  # Envoy proxy sidecar template (copied from launcher/)
+    adda-dev.tmux.conf   # tmux session configuration (copied from launcher/)
+tests/                   # pytest test suite
+  conftest.py            # pytest configuration
+launcher/                # host-side Bash launcher (active until #52 is complete)
   adda-dev.sh            # launcher entry-point script
   adda-dev.env.example   # example environment configuration
   envoy.yaml.template    # Envoy proxy sidecar template
   adda-dev.tmux.conf     # tmux session configuration
-.adda-init.sh            # repo-level init hook (installs pre-commit hook)
+pyproject.toml           # Python package config (build, deps, tool config)
+uv.lock                  # locked dependency versions (committed)
+.python-version          # pins Python 3.14 for uv
+.adda-init.sh            # repo-level init hook (syncs deps, installs pre-commit hook)
 .quality-gates.toml      # local quality gate definitions
 docs/conventions.md      # coding conventions for this repo
 ```
@@ -28,9 +37,16 @@ docs/conventions.md      # coding conventions for this repo
 ## Toolchain
 
 - **Shell:** Bash. All scripts use `#!/bin/bash` and `set -euo pipefail`.
-- **Local quality gate:** `bash -n` syntax check on all `.sh` files, via `.quality-gates.toml`. Run with `/usr/local/libexec/adda-dev-runtime/bin/quality-gates`.
-- **CI quality gates:** `shellcheck` (lint) and `gitleaks` (secret scan) — these run in CI only and are not available in the dev container.
-- **Pre-commit hook:** installed by `.adda-init.sh`; runs the local quality gates before each commit.
+- **Python:** Python >=3.14, managed by uv. Entry point: `adda-dev`.
+- **Package manager:** uv. Sync deps: `uv sync`. Run tools: `uv run <tool>`.
+- **Testing:** pytest. Run: `uv run pytest`.
+- **Linting/formatting:** ruff. Run: `uv run ruff check --fix src/ tests/ && uv run ruff format src/ tests/`.
+- **Type checking:** mypy (strict). Run: `uv run mypy src/`.
+- **Build:** `uv build` produces a wheel in `dist/`.
+- **Pre-commit hooks:** managed by `pre-commit` (installed via `uv run pre-commit install`). Installed automatically by `.adda-init.sh`.
+- **Local quality gate:** shell-syntax + python-lint + python-format + python-types + python-tests, via `.quality-gates.toml`. Run with `quality-gates`.
+- **CI quality gates:** `shellcheck` (lint), `gitleaks` (secret scan), and Python checks (ruff, mypy, pytest) — shell and secret gates run in CI only and are not available in the dev container.
+- **Coverage:** pytest-cov; branch coverage configured in `pyproject.toml`. Reports: terminal (missing lines) + XML for CI.
 
 ## References
 

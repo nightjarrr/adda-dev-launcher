@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "adda-dev"
+dynamic = ["version"]
+requires-python = ">=3.14"
+dependencies = [
+    "typer",
+    "rich",
+    "keyring",
+    "jeepney; sys_platform == 'linux'",
+]
+
+[project.scripts]
+adda-dev = "adda_dev.cli:app"
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0.dev0"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/adda_dev"]
+
+[tool.ruff]
+line-length = 128
+src = ["src"]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "--cov --cov-branch --cov-report=term-missing --cov-report=xml"
+
+[tool.coverage.run]
+source = ["adda_dev"]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    "raise NotImplementedError",
+]
