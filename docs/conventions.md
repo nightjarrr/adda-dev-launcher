@@ -49,9 +49,9 @@ Annotate all function and method signatures — parameters and return types. Use
 
 ---
 
-## Filesystem paths
+## General rules
 
-Use `pathlib.Path` for all filesystem paths inside application logic. Convert incoming string paths at the boundary; work with `Path` objects throughout.
+- **Filesystem paths:** use `pathlib.Path` throughout application logic. Convert incoming string paths at the boundary.
 
 ---
 
@@ -176,7 +176,7 @@ adda-dev CLI entry point.
 
 Every new behaviour requires tests. Every bug fix requires a regression test.
 
-**Coverage floor: 90%.** Enforced by pytest-cov — `uv run pytest` fails if combined line and branch coverage drops below this threshold.
+**Coverage floor: 95%.** Enforced by pytest-cov — `uv run pytest` fails if combined line and branch coverage drops below this threshold.
 
 ---
 
