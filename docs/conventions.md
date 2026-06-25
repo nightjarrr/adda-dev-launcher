@@ -6,15 +6,11 @@ PEP 8 is the base style. This document lists all points where the codebase inten
 
 ## Status of these conventions
 
-These conventions are required for new Python code and for meaningful modifications to existing Python code.
+These conventions are required for all Python code.
 
-When working on a feature or bug fix:
+When working on a feature or bug fix, do not perform broad unrelated cleanup unless the implementation plan explicitly includes it.
 
-- follow these conventions for all new code
-- bring directly touched code closer to these conventions when the change is small and local
-- do not perform broad unrelated cleanup unless the implementation plan explicitly includes it
-
-When this document conflicts with existing code, treat this document as the intended direction for future work. Preserve existing behaviour unless the task explicitly calls for changing it.
+When this document conflicts with existing code, treat this document as the intended direction for future work.
 
 ---
 
@@ -36,9 +32,7 @@ Maximum line length is 128 characters (PEP 8: 79). Configured in `pyproject.toml
 
 ## Naming
 
-Ruff is not configured with naming rules (`N` rule set is not enabled). Correct naming is the agent's sole responsibility — no linting safety net exists.
-
-Follow PEP 8 naming:
+Follow PEP 8 naming conventions, enforced by Ruff (`N` rule set):
 
 | Kind | Convention | Example |
 |---|---|---|
@@ -53,13 +47,23 @@ Follow PEP 8 naming:
 
 Annotate all function and method signatures — parameters and return types. Use Python 3.14 built-in generics (`list[str]`, `tuple[str, int]`). Do not use `typing.List`, `typing.Tuple`, or other deprecated aliases.
 
+---
+
+## Filesystem paths
+
 Use `pathlib.Path` for all filesystem paths inside application logic. Convert incoming string paths at the boundary; work with `Path` objects throughout.
 
 ---
 
-## Module layout
+## Modules and packages
 
-One module per functional area. When adding new functionality, decide first whether it belongs in an existing module or warrants a new one — do not let `cli.py` grow into a catch-all implementation file. Each subcommand that grows beyond a stub should have its own module in `src/adda_dev/`.
+One module per functional area. When adding new functionality, decide first whether it belongs in an existing module or warrants a new one — do not let `cli.py` grow into a catch-all implementation file.
+
+Promote a module to a sub-package when any of these apply:
+- The module exceeds ~300 lines and contains multiple unrelated classes or concerns.
+- Functionality is large enough to be independently testable as a group.
+
+Sub-packages live under `src/adda_dev/`. Each subcommand that grows beyond a stub should have its own module or sub-package.
 
 ---
 
@@ -114,12 +118,13 @@ Use `uv` for all Python work — environment, dependencies, build, and running p
 uv run pytest                     # run tests
 uv run ruff format src/ tests/    # format
 uv run ruff check src/ tests/     # lint
+uv run mypy src/                  # type-check
 uv run adda-dev                   # invoke the CLI
 uv build                          # build wheel
 quality-gates                     # run all local quality gates
 ```
 
-Provision dependencies with `uv sync --frozen` — installs the pinned set from `uv.lock`. Run after cloning or when `uv.lock` changes. Add new dependencies with `uv add` (runtime) or `uv add --group dev` (dev).
+Provision dependencies with `uv sync --frozen` — installs the pinned set from `uv.lock`. Run when `uv.lock` changes. Add new dependencies with `uv add` (runtime) or `uv add --group dev` (dev).
 
 Do not use `pip`, `poetry`, or `uv pip`. Do not manually activate or deactivate the project virtualenv.
 
@@ -170,6 +175,8 @@ adda-dev CLI entry point.
 - Shared fixtures used across multiple test modules go in `tests/conftest.py`.
 
 Every new behaviour requires tests. Every bug fix requires a regression test.
+
+**Coverage floor: 90%.** Enforced by pytest-cov — `uv run pytest` fails if combined line and branch coverage drops below this threshold.
 
 ---
 
