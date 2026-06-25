@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: quality-gates
+        name: Quality gates
+        entry: /usr/local/libexec/adda-dev-runtime/bin/quality-gates
+        language: system
+        pass_filenames: false
+        always_run: true

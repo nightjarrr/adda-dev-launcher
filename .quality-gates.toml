@@ -2,3 +2,23 @@
 name = "shell-syntax"
 description = "Bash syntax check on all shell scripts"
 command = "fdfind -HI -e sh -t f . -x bash -n {}"
+
+[[gate]]
+name = "python-lint"
+description = "Python linting with ruff (auto-fix enabled)"
+command = "uv run ruff check --fix src/ tests/"
+
+[[gate]]
+name = "python-format"
+description = "Python formatting with ruff"
+command = "uv run ruff format src/ tests/"
+
+[[gate]]
+name = "python-types"
+description = "Python type checking with mypy"
+command = "uv run mypy src/"
+
+[[gate]]
+name = "python-tests"
+description = "Python test suite"
+command = "uv run pytest -q"
