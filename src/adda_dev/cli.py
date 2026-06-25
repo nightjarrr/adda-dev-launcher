@@ -1,4 +1,6 @@
-"""adda-dev CLI entry point."""
+"""
+adda-dev CLI entry point.
+"""
 
 import typer
 

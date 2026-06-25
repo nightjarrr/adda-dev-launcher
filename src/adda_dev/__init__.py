@@ -1,1 +1,3 @@
-"""adda-dev — ADDA Dev Runtime launcher."""
+"""
+adda-dev — ADDA Dev Runtime launcher.
+"""
