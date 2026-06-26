@@ -1,0 +1,8 @@
+container_engine = "podman"
+envoy_image = "envoyproxy/envoy:v1.34.0"
+
+[project_defaults.tmpfs]
+home = "1g"
+
+[backends.deepseek]
+keyring_key = "ds-key"
