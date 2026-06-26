@@ -47,6 +47,8 @@ Follow PEP 8 naming conventions, enforced by Ruff (`N` rule set):
 
 Annotate all function and method signatures — parameters and return types. Use Python 3.14 built-in generics (`list[str]`, `tuple[str, int]`). Do not use `typing.List`, `typing.Tuple`, or other deprecated aliases.
 
+For generic functions and classes, use PEP 695 type-parameter syntax — `def load_toml[T: BaseModel](...) -> T`, `class Box[T]` — not `typing.TypeVar`/`typing.Generic` (Ruff `UP046`/`UP047` flag the legacy form on the 3.14 target).
+
 ---
 
 ## General rules
@@ -169,7 +171,7 @@ adda-dev CLI entry point.
 ## Testing
 
 - Test files: `test_{module}.py` (e.g., `test_cli.py`, `test_config.py`).
-- Test functions: `test_{Subject}_{description}` where `Subject` is a class name or module-level function name, and `description` is a free label — a section keyword (`input_validation`, `core_logic`) or a specific scenario.
+- Test functions: `test_{subject}_{description}` where `subject` identifies the class or module-level function under test and `description` is a free label — a section keyword (`input_validation`, `core_logic`) or a specific scenario. Test function names must be all-lowercase `snake_case` (Ruff `N802` rejects any other case); lowercase a PascalCase class name into the `subject` segment — e.g. `test_project_file_valid_minimal` for `ProjectFile`, not `test_ProjectFile_valid_minimal`.
 - Use `tmp_path` (function-scoped) and `tmp_path_factory` (module-scoped) for temporary filesystem state. Pytest cleans up both automatically. Do not create test state outside these fixtures without an explicit teardown.
 - Static test data goes in `tests/data/{module}/` — create the folder only when the module's tests need static files.
 - Shared fixtures used across multiple test modules go in `tests/conftest.py`.
