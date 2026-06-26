@@ -7,6 +7,8 @@ dependencies = [
     "rich",
     "keyring",
     "jeepney; sys_platform == 'linux'",
+    "pydantic>=2.13.4",
+    "tomlkit>=0.13.2",
 ]
 
 [project.scripts]
@@ -44,6 +46,7 @@ indent-style = "space"
 python_version = "3.14"
 strict = true
 files = ["src"]
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 addopts = "--cov --cov-branch --cov-report=term-missing --cov-report=xml"

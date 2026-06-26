@@ -1,0 +1,8 @@
+owner = "nightjarrr"
+repo = "adda-dev-launcher"
+image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"
+github_keyring_key = "demo-token"
+backend = "deepseek"
+
+[tmpfs]
+workspace = "2g"
