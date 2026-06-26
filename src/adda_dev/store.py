@@ -12,10 +12,8 @@ from pydantic import BaseModel, ValidationError
 
 from .common import AddaDevError
 
-# Valid project name: only safe filesystem characters, no path separators.
-_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-# Dot-only names (. and ..) are path traversal risks even if they match the safe-chars regex.
-_DOT_ONLY_RE = re.compile(r"^\.*$")
+# Valid registry slug: letters, digits, hyphens, underscores only — no dots or path separators.
+_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class TomlParseError(AddaDevError):
@@ -26,8 +24,8 @@ class SchemaValidationError(AddaDevError):
     """Raised when a parsed TOML document fails Pydantic schema validation."""
 
 
-class InvalidProjectNameError(AddaDevError):
-    """Raised when a project name contains unsafe characters or path components."""
+class InvalidFileNameError(AddaDevError):
+    """Raised when a name contains unsafe characters or is otherwise not a valid registry slug."""
 
 
 def resolve_config_dir() -> Path:
@@ -37,23 +35,23 @@ def resolve_config_dir() -> Path:
     return base / "adda-dev"
 
 
-def app_config_file(config_dir: Path) -> Path:
-    """Return the path to config.toml inside config_dir."""
-    return config_dir / "config.toml"
-
-
 def projects_dir(config_dir: Path) -> Path:
     """Return the projects registry directory inside config_dir."""
     return config_dir / "projects"
 
 
-def project_file(config_dir: Path, name: str) -> Path:
-    """Return the path to the project TOML file, validating name first."""
-    if not name or _DOT_ONLY_RE.match(name) or not _NAME_RE.match(name):
-        raise InvalidProjectNameError(
-            f"Invalid project name {name!r}: must match ^[A-Za-z0-9._-]+$, not be empty, and not be a dot-path."
+def validate_file_name(name: str) -> str:
+    """Validate that name is a safe registry slug and return it unchanged.
+
+    Raises:
+        InvalidFileNameError: if name is empty, contains dots, path separators, or any
+            character outside [A-Za-z0-9_-].
+    """
+    if not name or not _NAME_RE.match(name):
+        raise InvalidFileNameError(
+            f"Invalid name {name!r}: must be non-empty and match ^[A-Za-z0-9_-]+$ (no dots or path separators)."
         )
-    return projects_dir(config_dir) / f"{name}.toml"
+    return name
 
 
 def load_toml[T: BaseModel](path: Path, model: type[T]) -> T:

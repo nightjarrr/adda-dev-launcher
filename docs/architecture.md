@@ -10,7 +10,7 @@
 | CLI framework | Typer | Built on Click; typed-function API; integrates with Rich; FastAPI org, well-maintained |
 | Terminal output | Rich | Industry standard; used by pip, pytest, AWS CLI; same team as Textual |
 | Interactive prompts | Textual | Rich-based TUI framework; same team as Rich; not required for MVP |
-| Config files | `tomlkit` | read + write (matches molim); validated by Pydantic v2 |
+| Config files | `tomlkit` | read + write; validated by Pydantic v2 |
 | Keyring | `keyring` + `jeepney` | `jeepney` = pure Python DBus; no native compilation; wheel stays `py3-none-any` |
 | Subprocess / process | `stdlib` | `os.execvp` for process replacement; `subprocess.Popen` for `docker run -it`; SIGWINCH forwarding |
 | Terminal multiplexer | `tmux -L <name>` | Dedicated tmux server; fully isolated from user's personal tmux sessions |

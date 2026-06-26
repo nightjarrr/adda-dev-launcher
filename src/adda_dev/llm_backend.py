@@ -27,19 +27,19 @@ class AnthropicBackendConfig(LlmBackendConfig):
 
 
 class DeepSeekBackendConfig(LlmBackendConfig):
-    """DeepSeek backend configuration with model and API defaults from the Bash launcher."""
+    """DeepSeek backend configuration with model and API defaults."""
 
     keyring_key: str = "apikey"
     base_url: str = "https://api.deepseek.com/anthropic"
     model: str = "deepseek-v4-flash"
     opus_model: str = "deepseek-v4-pro[1m]"
-    sonnet_model: str = "deepseek-v4-pro[1m]"
+    sonnet_model: str = "deepseek-v4-flash"
     haiku_model: str = "deepseek-v4-flash"
     subagent_model: str = "deepseek-v4-flash"
     effort_level: str = "max"
 
 
-class Backends(StrictModel):
+class LlmBackends(StrictModel):
     """Registry of per-vendor backend configurations."""
 
     anthropic: AnthropicBackendConfig = AnthropicBackendConfig()

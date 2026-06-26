@@ -1,5 +1,5 @@
 """
-Tests for store.py: XDG resolution, file layout helpers, name validation, load_toml.
+Tests for store.py: XDG resolution, projects_dir, validate_file_name, load_toml.
 """
 
 from pathlib import Path
@@ -8,14 +8,13 @@ import pytest
 
 from adda_dev.common import StrictModel
 from adda_dev.store import (
-    InvalidProjectNameError,
+    InvalidFileNameError,
     SchemaValidationError,
     TomlParseError,
-    app_config_file,
     load_toml,
-    project_file,
     projects_dir,
     resolve_config_dir,
+    validate_file_name,
 )
 
 # ---------------------------------------------------------------------------
@@ -42,25 +41,16 @@ def test_resolve_config_dir_empty_xdg_falls_back(monkeypatch: pytest.MonkeyPatch
 
 
 # ---------------------------------------------------------------------------
-# File layout builders
+# projects_dir
 # ---------------------------------------------------------------------------
-
-
-def test_app_config_file_returns_correct_path(tmp_path: Path) -> None:
-    assert app_config_file(tmp_path) == tmp_path / "config.toml"
 
 
 def test_projects_dir_returns_correct_path(tmp_path: Path) -> None:
     assert projects_dir(tmp_path) == tmp_path / "projects"
 
 
-def test_project_file_valid_name(tmp_path: Path) -> None:
-    path = project_file(tmp_path, "my-project")
-    assert path == tmp_path / "projects" / "my-project.toml"
-
-
 # ---------------------------------------------------------------------------
-# project_file name validation — accept cases
+# validate_file_name — accept cases
 # ---------------------------------------------------------------------------
 
 
@@ -69,20 +59,19 @@ def test_project_file_valid_name(tmp_path: Path) -> None:
     [
         "demo",
         "my-project",
-        "org.repo",
         "repo_name",
         "UPPER",
         "a1b2",
+        "a_b-1",
         "a" * 64,
     ],
 )
-def test_project_file_valid_names(tmp_path: Path, name: str) -> None:
-    path = project_file(tmp_path, name)
-    assert path.name == f"{name}.toml"
+def test_validate_file_name_valid_names(name: str) -> None:
+    assert validate_file_name(name) == name
 
 
 # ---------------------------------------------------------------------------
-# project_file name validation — reject cases
+# validate_file_name — reject cases
 # ---------------------------------------------------------------------------
 
 
@@ -92,6 +81,7 @@ def test_project_file_valid_names(tmp_path: Path, name: str) -> None:
         "",
         ".",
         "..",
+        "a.b",
         "../escape",
         "a/b",
         "foo/bar",
@@ -101,9 +91,13 @@ def test_project_file_valid_names(tmp_path: Path, name: str) -> None:
         "/absolute",
     ],
 )
-def test_project_file_invalid_names(tmp_path: Path, name: str) -> None:
-    with pytest.raises(InvalidProjectNameError):
-        project_file(tmp_path, name)
+def test_validate_file_name_invalid_names(name: str) -> None:
+    with pytest.raises(InvalidFileNameError):
+        validate_file_name(name)
+
+
+def test_validate_file_name_returns_name_unchanged() -> None:
+    assert validate_file_name("my-project") == "my-project"
 
 
 # ---------------------------------------------------------------------------

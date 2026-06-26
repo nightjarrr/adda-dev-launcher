@@ -1,5 +1,5 @@
 """
-Tests for project.py: ProjectFile validation, Project resolution, Project.load paths.
+Tests for project.py: ProjectFileModel validation, Project resolution, Project.load paths.
 """
 
 from pathlib import Path
@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 
 from adda_dev.app_config import AppConfig, ProjectDefaults
-from adda_dev.backends import LlmBackend
-from adda_dev.project import Project, ProjectFile, ProjectNotFoundError
-from adda_dev.store import InvalidProjectNameError, SchemaValidationError, TomlParseError
+from adda_dev.llm_backend import LlmBackend
+from adda_dev.project import Project, ProjectFileModel, ProjectNotFoundError
+from adda_dev.store import InvalidFileNameError, SchemaValidationError, TomlParseError
 
 DATA_DIR = Path(__file__).parent / "data" / "config"
 
@@ -21,7 +21,7 @@ _CUSTOM_DEFAULTS = ProjectDefaults.model_validate({"tmpfs": {"home": "1g", "work
 
 
 # ---------------------------------------------------------------------------
-# ProjectFile — required fields
+# ProjectFileModel — required fields
 # ---------------------------------------------------------------------------
 
 
@@ -35,131 +35,139 @@ def _valid_file_data() -> dict[str, object]:
     }
 
 
-def test_project_file_valid_minimal() -> None:
-    pf = ProjectFile.model_validate(_valid_file_data())
+def test_project_file_model_valid_minimal() -> None:
+    pf = ProjectFileModel.model_validate(_valid_file_data())
     assert pf.owner == "nightjarrr"
     assert pf.backend == LlmBackend.deepseek
     assert pf.tmpfs is None
 
 
-def test_project_file_valid_with_tmpfs() -> None:
+def test_project_file_model_valid_with_tmpfs() -> None:
     data = _valid_file_data()
     data["tmpfs"] = {"workspace": "2g"}
-    pf = ProjectFile.model_validate(data)
+    pf = ProjectFileModel.model_validate(data)
     assert pf.tmpfs is not None
     assert pf.tmpfs.workspace == "2g"
     assert pf.tmpfs.home is None
 
 
-def test_project_file_missing_owner_rejected() -> None:
+def test_project_file_model_missing_owner_rejected() -> None:
     data = _valid_file_data()
     del data["owner"]
     with pytest.raises(Exception):
-        ProjectFile.model_validate(data)
+        ProjectFileModel.model_validate(data)
 
 
-def test_project_file_missing_repo_rejected() -> None:
+def test_project_file_model_missing_repo_rejected() -> None:
     data = _valid_file_data()
     del data["repo"]
     with pytest.raises(Exception):
-        ProjectFile.model_validate(data)
+        ProjectFileModel.model_validate(data)
 
 
-def test_project_file_missing_backend_rejected() -> None:
+def test_project_file_model_missing_backend_rejected() -> None:
     data = _valid_file_data()
     del data["backend"]
     with pytest.raises(Exception):
-        ProjectFile.model_validate(data)
+        ProjectFileModel.model_validate(data)
 
 
-def test_project_file_missing_image_rejected() -> None:
+def test_project_file_model_missing_image_rejected() -> None:
     data = _valid_file_data()
     del data["image"]
     with pytest.raises(Exception):
-        ProjectFile.model_validate(data)
+        ProjectFileModel.model_validate(data)
 
 
-def test_project_file_missing_github_keyring_key_rejected() -> None:
+def test_project_file_model_missing_github_keyring_key_rejected() -> None:
     data = _valid_file_data()
     del data["github_keyring_key"]
     with pytest.raises(Exception):
-        ProjectFile.model_validate(data)
+        ProjectFileModel.model_validate(data)
 
 
-def test_project_file_unknown_key_rejected() -> None:
+def test_project_file_model_unknown_key_rejected() -> None:
     data = _valid_file_data()
     data["unknown"] = "value"
     with pytest.raises(Exception):
-        ProjectFile.model_validate(data)
+        ProjectFileModel.model_validate(data)
 
 
-def test_project_file_bad_owner_rejected() -> None:
+def test_project_file_model_bad_owner_rejected() -> None:
     data = _valid_file_data()
     data["owner"] = "bad/owner"
     with pytest.raises(Exception):
-        ProjectFile.model_validate(data)
+        ProjectFileModel.model_validate(data)
 
 
-def test_project_file_bad_repo_rejected() -> None:
+def test_project_file_model_bad_repo_rejected() -> None:
     data = _valid_file_data()
     data["repo"] = "bad repo"
     with pytest.raises(Exception):
-        ProjectFile.model_validate(data)
+        ProjectFileModel.model_validate(data)
 
 
-def test_project_file_invalid_backend_rejected() -> None:
+def test_project_file_model_invalid_backend_rejected() -> None:
     data = _valid_file_data()
     data["backend"] = "openai"
     with pytest.raises(Exception):
-        ProjectFile.model_validate(data)
+        ProjectFileModel.model_validate(data)
+
+
+def test_project_file_model_owner_with_dot_accepted() -> None:
+    # GitHub owner/repo may contain dots — unrelated to the registry slug constraint.
+    data = _valid_file_data()
+    data["repo"] = "my.repo"
+    pf = ProjectFileModel.model_validate(data)
+    assert pf.repo == "my.repo"
 
 
 # ---------------------------------------------------------------------------
-# Project.from_file — tmpfs resolution: no override → defaults pass through
+# Project._from_file — tmpfs resolution: no override → defaults pass through
 # ---------------------------------------------------------------------------
 
 
 def test_project_from_file_no_tmpfs_override_uses_defaults() -> None:
-    pf = ProjectFile.model_validate(_valid_file_data())
-    proj = Project.from_file("demo", pf, _CUSTOM_DEFAULTS)
+    pf = ProjectFileModel.model_validate(_valid_file_data())
+    proj = Project._from_file("demo", pf, _CUSTOM_DEFAULTS)
     assert proj.tmpfs.home == "1g"
     assert proj.tmpfs.workspace == "512m"
     assert proj.tmpfs.tmp == "128m"
 
 
 def test_project_from_file_no_tmpfs_override_uses_builtin_defaults() -> None:
-    pf = ProjectFile.model_validate(_valid_file_data())
-    proj = Project.from_file("demo", pf, _DEFAULTS)
+    pf = ProjectFileModel.model_validate(_valid_file_data())
+    proj = Project._from_file("demo", pf, _DEFAULTS)
     assert proj.tmpfs.home == "512m"
     assert proj.tmpfs.workspace == "256m"
     assert proj.tmpfs.tmp == "256m"
 
 
 # ---------------------------------------------------------------------------
-# Project.from_file — full tmpfs override
+# Project._from_file — full tmpfs override
 # ---------------------------------------------------------------------------
 
 
 def test_project_from_file_full_tmpfs_override() -> None:
     data = _valid_file_data()
     data["tmpfs"] = {"home": "2g", "workspace": "1g", "tmp": "512m"}
-    pf = ProjectFile.model_validate(data)
-    proj = Project.from_file("demo", pf, _DEFAULTS)
+    pf = ProjectFileModel.model_validate(data)
+    proj = Project._from_file("demo", pf, _DEFAULTS)
     assert proj.tmpfs.home == "2g"
     assert proj.tmpfs.workspace == "1g"
     assert proj.tmpfs.tmp == "512m"
 
 
 # ---------------------------------------------------------------------------
-# Project.from_file — partial tmpfs override (field-wise merge)
+# Project._from_file — partial tmpfs override (field-wise merge)
 # ---------------------------------------------------------------------------
 
 
 def test_project_from_file_partial_tmpfs_override_workspace_only() -> None:
     data = _valid_file_data()
     data["tmpfs"] = {"workspace": "2g"}
-    pf = ProjectFile.model_validate(data)
-    proj = Project.from_file("demo", pf, _CUSTOM_DEFAULTS)
+    pf = ProjectFileModel.model_validate(data)
+    proj = Project._from_file("demo", pf, _CUSTOM_DEFAULTS)
     # workspace overridden; home and tmp from custom defaults
     assert proj.tmpfs.workspace == "2g"
     assert proj.tmpfs.home == "1g"
@@ -169,21 +177,21 @@ def test_project_from_file_partial_tmpfs_override_workspace_only() -> None:
 def test_project_from_file_partial_tmpfs_override_home_only() -> None:
     data = _valid_file_data()
     data["tmpfs"] = {"home": "4g"}
-    pf = ProjectFile.model_validate(data)
-    proj = Project.from_file("demo", pf, _DEFAULTS)
+    pf = ProjectFileModel.model_validate(data)
+    proj = Project._from_file("demo", pf, _DEFAULTS)
     assert proj.tmpfs.home == "4g"
     assert proj.tmpfs.workspace == "256m"
     assert proj.tmpfs.tmp == "256m"
 
 
 # ---------------------------------------------------------------------------
-# Project.from_file — identity fields pass through
+# Project._from_file — identity fields pass through
 # ---------------------------------------------------------------------------
 
 
 def test_project_from_file_identity_fields() -> None:
-    pf = ProjectFile.model_validate(_valid_file_data())
-    proj = Project.from_file("myproj", pf, _DEFAULTS)
+    pf = ProjectFileModel.model_validate(_valid_file_data())
+    proj = Project._from_file("myproj", pf, _DEFAULTS)
     assert proj.name == "myproj"
     assert proj.owner == "nightjarrr"
     assert proj.repo == "adda-dev-launcher"
@@ -224,6 +232,19 @@ def test_project_load_from_static_fixture() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Project.load — builds correct path (entity owns <name>.toml naming)
+# ---------------------------------------------------------------------------
+
+
+def test_project_load_builds_correct_path(tmp_path: Path) -> None:
+    (tmp_path / "projects").mkdir()
+    proj_file = tmp_path / "projects" / "myproj.toml"
+    proj_file.write_text('owner = "acme"\nrepo = "tool"\nimage = "img:v1"\ngithub_keyring_key = "k"\nbackend = "anthropic"\n')
+    proj = Project.load("myproj", _DEFAULTS, config_dir=tmp_path)
+    assert proj.name == "myproj"
+
+
+# ---------------------------------------------------------------------------
 # Project.load — missing file → ProjectNotFoundError
 # ---------------------------------------------------------------------------
 
@@ -235,23 +256,28 @@ def test_project_load_missing_file_raises_project_not_found_error(tmp_path: Path
 
 
 # ---------------------------------------------------------------------------
-# Project.load — invalid project name → InvalidProjectNameError
+# Project.load — invalid project name → InvalidFileNameError
 # ---------------------------------------------------------------------------
 
 
-def test_project_load_path_traversal_raises_invalid_project_name_error(tmp_path: Path) -> None:
-    with pytest.raises(InvalidProjectNameError):
+def test_project_load_path_traversal_raises_invalid_file_name_error(tmp_path: Path) -> None:
+    with pytest.raises(InvalidFileNameError):
         Project.load("../escape", _DEFAULTS, config_dir=tmp_path)
 
 
-def test_project_load_separator_in_name_raises_invalid_project_name_error(tmp_path: Path) -> None:
-    with pytest.raises(InvalidProjectNameError):
+def test_project_load_separator_in_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+    with pytest.raises(InvalidFileNameError):
         Project.load("a/b", _DEFAULTS, config_dir=tmp_path)
 
 
-def test_project_load_empty_name_raises_invalid_project_name_error(tmp_path: Path) -> None:
-    with pytest.raises(InvalidProjectNameError):
+def test_project_load_empty_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+    with pytest.raises(InvalidFileNameError):
         Project.load("", _DEFAULTS, config_dir=tmp_path)
+
+
+def test_project_load_dotted_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+    with pytest.raises(InvalidFileNameError):
+        Project.load("a.b", _DEFAULTS, config_dir=tmp_path)
 
 
 # ---------------------------------------------------------------------------

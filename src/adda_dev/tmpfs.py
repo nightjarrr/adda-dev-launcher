@@ -19,6 +19,16 @@ class TmpfsSizes(StrictModel):
     workspace: Annotated[str, Field(pattern=_SIZE_PATTERN)] = "256m"
     tmp: Annotated[str, Field(pattern=_SIZE_PATTERN)] = "256m"
 
+    def with_override(self, override: TmpfsOverride | None) -> TmpfsSizes:
+        """Return self if override is None, else a new TmpfsSizes with each non-None override field applied."""
+        if override is None:
+            return self
+        return TmpfsSizes(
+            home=override.home if override.home is not None else self.home,
+            workspace=override.workspace if override.workspace is not None else self.workspace,
+            tmp=override.tmp if override.tmp is not None else self.tmp,
+        )
+
 
 class TmpfsOverride(StrictModel):
     """Sparse patch of tmpfs sizes; None means inherit from project defaults."""
