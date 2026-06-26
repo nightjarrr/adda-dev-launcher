@@ -31,6 +31,7 @@ uv.lock                  # locked dependency versions (committed)
 .python-version          # pins Python 3.14 for uv
 .adda-init.sh            # repo-level init hook (syncs deps, installs pre-commit hook)
 .quality-gates.toml      # local quality gate definitions
+docs/architecture.md     # Python package architecture: principles, layout, config/project model
 docs/conventions.md      # coding conventions for this repo
 ```
 
@@ -50,5 +51,6 @@ docs/conventions.md      # coding conventions for this repo
 
 ## References
 
-- `docs/conventions.md` — Bash style conventions for this project.
+- `docs/architecture.md` — Python package architecture: design principles, module layout, and the config/project model.
+- `docs/conventions.md` — coding conventions for this project.
 - `docs/launcher-container-contract.md` — authoritative host-container contract.
