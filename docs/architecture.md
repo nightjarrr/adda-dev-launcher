@@ -1,17 +1,82 @@
-# adda-dev-launcher — Architecture Design
+# adda-dev-launcher — Architecture
 
-## Tech stack
+## 1. Overview
 
-| Role | Choice | Notes |
+The Python launcher is the host-side CLI that runs one AI-harness session per invocation: it reads host and project configuration, retrieves credentials from the host keyring, and starts the container together with its Envoy network sidecar. The invocation model is `adda-dev run <project> [--issue N]` — one project, one session.
+
+It is replacing the Bash launcher (`launcher/adda-dev.sh`) and is being built incrementally under the redesign (#45 / #52). This document captures the **foundational** structure and decisions as they land — not an inventory of the code, which is the source of truth for specifics.
+
+Adjacent documents, by viewpoint:
+- **`conventions.md`** — how code is written (style, naming, types, imports, testing mechanics, output). This document does not restate those.
+- **`conceptual-design.md`** / **`technical-design.md`** — the system's trust, threat, session, and network model (and the still-live Bash launcher).
+- **`launcher-container-contract.md`** — the runtime interface between launcher and container.
+
+---
+
+## 2. Design principles
+
+New work is measured against these.
+
+**Domain-driven module boundaries.** Modules are split by concept, not by Python kind. There are no `enums` / `errors` / `constants` catch-all modules: an enum, exception, or constant lives in the module that owns the concept it belongs to. Only genuinely cross-cutting foundations — the root exception and the strict-model base — live in `common`. (Mechanics of when a module becomes a sub-package: `conventions.md`.)
+
+**Configuration is data; a project is a domain entity.** `AppConfig` is a passive, validated value object describing the host. A `Project` is an active domain model whose TOML file is its *serialized state*; it uses configuration to resolve itself and to act, but it is not configuration. The two are never fused into a third "effective config" object — resolving a project against host defaults is the project's own behavior.
+
+**Layered configuration, resolved downward.** Settings flow host → project → runtime; each layer overrides the one above, and per-invocation runtime overrides win. The launcher owns the host and project layers; the runtime layer arrives with the run command.
+
+**Validate at the edge, fail fast.** External input (TOML files) is parsed and schema-validated the moment it is read, and unknown keys are rejected. Past that boundary the code works only with typed, already-valid models. Failures surface as typed exceptions rooted at a single `AddaDevError`; library layers raise, and only the CLI boundary renders them for the user. (The concrete output/exit mechanism is a convention, see `conventions.md`.)
+
+**Thin host.** The host holds no project checkout; the only persistent host state is the config store under `~/.config/adda-dev/`. (Rationale: `conceptual-design.md`.)
+
+**Self-contained environment.** uv provisions the interpreter and the lockfile-pinned dependencies — uv is the only host prerequisite for development. A new runtime or system dependency requires explicit justification.
+
+---
+
+## 3. Technology choices
+
+| Role | Choice | Rationale |
 |---|---|---|
-| Language | Python | Ecosystem solves distribution, CLI, config, keyring, testing — no custom infra |
-| Distribution | `uv tool install <wheel-url>` from GitHub Releases | Modelled after molim; uv manages Python runtime — only host prerequisite is uv |
-| Packaging | `pyproject.toml` + uv; hatch-vcs | Standard Python packaging; modelled after molim; version stamped from git tags |
-| CLI framework | Typer | Built on Click; typed-function API; integrates with Rich; FastAPI org, well-maintained |
-| Terminal output | Rich | Industry standard; used by pip, pytest, AWS CLI; same team as Textual |
-| Interactive prompts | Textual | Rich-based TUI framework; same team as Rich; not required for MVP |
-| Config files | `tomlkit` | read + write; validated by Pydantic v2 |
-| Keyring | `keyring` + `jeepney` | `jeepney` = pure Python DBus; no native compilation; wheel stays `py3-none-any` |
-| Subprocess / process | `stdlib` | `os.execvp` for process replacement; `subprocess.Popen` for `docker run -it`; SIGWINCH forwarding |
-| Terminal multiplexer | `tmux -L <name>` | Dedicated tmux server; fully isolated from user's personal tmux sessions |
-| Container engine | TBD | Docker and Podman both supported; detection/config mechanism TBD |
+| Language | Python | Ecosystem covers distribution, CLI, config, keyring, and testing — no custom infrastructure |
+| Distribution | `uv tool install <wheel-url>` from GitHub Releases | uv manages the Python runtime, so uv is the only host prerequisite |
+| Packaging / versioning | `pyproject.toml` + uv; `hatch-vcs` | Version stamped from git tags |
+| CLI framework | Typer | Typed-function API over Click; integrates with Rich |
+| Terminal output | Rich | User-facing output; pairs with Textual |
+| Interactive prompts | Textual | Rich-based TUI; not required for the MVP |
+| Config format / validation | `tomlkit` + Pydantic v2 | tomlkit reads now and writes later (project registry editing); Pydantic gives typed, strict validation |
+| Keyring | `keyring` + `jeepney` | Pure-Python DBus; no native build, wheel stays `py3-none-any` |
+| Subprocess / process | stdlib | `os.execvp` for process replacement; `subprocess` for the container run |
+| Terminal multiplexer | `tmux -L <name>` | Dedicated server, isolated from the user's tmux |
+| Container engine | Docker or Podman | Selected via `AppConfig` (`container_engine`); no auto-detection |
+
+---
+
+## 4. Package layout
+
+Source lives under `src/adda_dev/`. Modules form a one-way dependency graph, each owning one concern:
+
+```
+common → store / tmpfs / llm_backend → app_config → project → cli
+```
+
+| Module | Concern |
+|---|---|
+| `common` | Cross-cutting foundations: the `AddaDevError` root exception and the strict Pydantic base model |
+| `store` | The on-disk config store: config-directory resolution, safe file-name validation, and TOML load+validate |
+| `tmpfs` | tmpfs sizing value objects and their override merge |
+| `llm_backend` | LLM backend vocabulary: the backend enum, per-vendor config, and the registry |
+| `app_config` | The `AppConfig` entity — host settings, backend registry, and project defaults |
+| `project` | The `Project` domain entity — file schema, resolution, and registry load |
+| `cli` | Typer entry point |
+
+The later layers of the launcher — credentials, container/network execution, tmux session management, and the run command — extend this graph as they are built.
+
+---
+
+## 5. Configuration and project model
+
+**Two entities.** `AppConfig` is the host-wide configuration; a `Project` is a domain model. The project's TOML file is parsed into a serialized file shape and then *resolved* into the fully-typed `Project` the rest of the launcher uses. Fields belong to the code, not to this document.
+
+**The config store and its boundary.** All host state lives under `~/.config/adda-dev/` (XDG; `$XDG_CONFIG_HOME` relocates it — there is no config-directory flag). The `store` module is the persistence boundary: it exposes only the entry point into that folder, safe file-name validation, and TOML loading — it knows no filenames. Each entity owns its own location *within* the store: `AppConfig` is the root `config.toml`; a `Project` is an entry in the `projects/` registry. Persistence mechanics stay in one place; layout knowledge stays with the entities that own it.
+
+**Resolution.** A project is resolved by applying its optional overrides onto the host's project-defaults, with the merge logic living on the value object it concerns. Host configuration is optional — absent means built-in defaults; a project is mandatory — absent is an error. A project actively selects its LLM backend: it inherits no default backend and cannot override vendor settings, which are host-wide.
+
+**Errors.** Persistence-level failures are vendor-neutral (parse, schema validation, invalid file name); a domain-level failure (project not found) lives with the domain. All derive from `AddaDevError`, so a single catch at the CLI boundary is sufficient.
