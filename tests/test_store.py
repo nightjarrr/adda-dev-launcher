@@ -1,5 +1,5 @@
 """
-Tests for store.py: XDG resolution, projects_dir, validate_file_name, load_toml.
+Tests for store.py: XDG resolution, validate_file_name, load_toml.
 """
 
 from pathlib import Path
@@ -12,7 +12,6 @@ from adda_dev.store import (
     SchemaValidationError,
     TomlParseError,
     load_toml,
-    projects_dir,
     resolve_config_dir,
     validate_file_name,
 )
@@ -38,15 +37,6 @@ def test_resolve_config_dir_empty_xdg_falls_back(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("XDG_CONFIG_HOME", "")
     result = resolve_config_dir()
     assert result == Path.home() / ".config" / "adda-dev"
-
-
-# ---------------------------------------------------------------------------
-# projects_dir
-# ---------------------------------------------------------------------------
-
-
-def test_projects_dir_returns_correct_path(tmp_path: Path) -> None:
-    assert projects_dir(tmp_path) == tmp_path / "projects"
 
 
 # ---------------------------------------------------------------------------

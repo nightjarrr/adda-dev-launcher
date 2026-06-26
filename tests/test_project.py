@@ -8,7 +8,7 @@ import pytest
 
 from adda_dev.app_config import AppConfig, ProjectDefaults
 from adda_dev.llm_backend import LlmBackend
-from adda_dev.project import Project, ProjectFileModel, ProjectNotFoundError
+from adda_dev.project import PROJECTS_DIR_NAME, Project, ProjectFileModel, ProjectNotFoundError
 from adda_dev.store import InvalidFileNameError, SchemaValidationError, TomlParseError
 
 DATA_DIR = Path(__file__).parent / "data" / "config"
@@ -242,6 +242,23 @@ def test_project_load_builds_correct_path(tmp_path: Path) -> None:
     proj_file.write_text('owner = "acme"\nrepo = "tool"\nimage = "img:v1"\ngithub_keyring_key = "k"\nbackend = "anthropic"\n')
     proj = Project.load("myproj", _DEFAULTS, config_dir=tmp_path)
     assert proj.name == "myproj"
+
+
+def test_project_load_uses_projects_dir_name_constant(tmp_path: Path) -> None:
+    # Project domain owns path construction: file must live at <config_dir>/PROJECTS_DIR_NAME/<name>.toml.
+    projects_subdir = tmp_path / PROJECTS_DIR_NAME
+    projects_subdir.mkdir()
+    (projects_subdir / "alpha.toml").write_text(
+        'owner = "acme"\nrepo = "tool"\nimage = "img:v1"\ngithub_keyring_key = "k"\nbackend = "anthropic"\n'
+    )
+    proj = Project.load("alpha", _DEFAULTS, config_dir=tmp_path)
+    assert proj.name == "alpha"
+    # A file placed outside PROJECTS_DIR_NAME is not found.
+    (tmp_path / "alpha.toml").write_text(
+        'owner = "acme"\nrepo = "tool"\nimage = "img:v1"\ngithub_keyring_key = "k"\nbackend = "anthropic"\n'
+    )
+    with pytest.raises(ProjectNotFoundError):
+        Project.load("alpha", _DEFAULTS, config_dir=projects_subdir)
 
 
 # ---------------------------------------------------------------------------

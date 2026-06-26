@@ -35,11 +35,6 @@ def resolve_config_dir() -> Path:
     return base / "adda-dev"
 
 
-def projects_dir(config_dir: Path) -> Path:
-    """Return the projects registry directory inside config_dir."""
-    return config_dir / "projects"
-
-
 def validate_file_name(name: str) -> str:
     """Validate that name is a safe registry slug and return it unchanged.
 

@@ -11,8 +11,10 @@ from pydantic import Field
 from .app_config import ProjectDefaults
 from .common import AddaDevError, StrictModel
 from .llm_backend import LlmBackend
-from .store import load_toml, projects_dir, resolve_config_dir, validate_file_name
+from .store import load_toml, resolve_config_dir, validate_file_name
 from .tmpfs import TmpfsOverride, TmpfsSizes
+
+PROJECTS_DIR_NAME = "projects"
 
 # GitHub owner/repo name: letters, digits, hyphens, underscores, dots.
 _GH_NAME_PATTERN = r"^[A-Za-z0-9._-]+$"
@@ -73,7 +75,7 @@ class Project:
             SchemaValidationError: if the file fails schema validation.
         """
         cd = config_dir if config_dir is not None else resolve_config_dir()
-        path = projects_dir(cd) / f"{validate_file_name(name)}.toml"
+        path = cd / PROJECTS_DIR_NAME / f"{validate_file_name(name)}.toml"
         if not path.exists():
             raise ProjectNotFoundError(f"Project {name!r} not found: {path} does not exist.")
         file = load_toml(path, ProjectFileModel)
