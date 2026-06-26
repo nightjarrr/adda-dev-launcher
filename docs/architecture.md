@@ -19,6 +19,10 @@ New work is measured against these.
 
 **Domain-driven module boundaries.** Modules are split by concept, not by Python kind. There are no `enums` / `errors` / `constants` catch-all modules: an enum, exception, or constant lives in the module that owns the concept it belongs to. Only genuinely cross-cutting foundations — the root exception and the strict-model base — live in `common`. (Mechanics of when a module becomes a sub-package: `conventions.md`.)
 
+**Open for extension, closed for modification.** New behaviour is added through defined extension points rather than by editing existing code. The LLM backend model is the worked example: a new vendor is a new backend-config subclass plus an enum value and a registry entry — existing backends and the load path are untouched.
+
+**Explicit dependencies, no global state.** Components receive what they need as arguments rather than reaching for ambient state: load entry points take an injectable config directory, and a project is resolved against the project-defaults it is handed, not a global config object. There are no module-level singletons or shared mutable configuration. The run command will be the composition root that loads the entities and wires a session together.
+
 **Configuration is data; a project is a domain entity.** `AppConfig` is a passive, validated value object describing the host. A `Project` is an active domain model whose TOML file is its *serialized state*; it uses configuration to resolve itself and to act, but it is not configuration. The two are never fused into a third "effective config" object — resolving a project against host defaults is the project's own behavior.
 
 **Layered configuration, resolved downward.** Settings flow host → project → runtime; each layer overrides the one above, and per-invocation runtime overrides win. The launcher owns the host and project layers; the runtime layer arrives with the run command.
