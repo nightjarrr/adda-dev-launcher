@@ -58,7 +58,7 @@ New work is measured against these.
 Source lives under `src/adda_dev/`. Modules form a one-way dependency graph, each owning one concern:
 
 ```
-common → store / tmpfs / llm_backend → app_config → project → cli
+common → store / tmpfs / credentials → github / llm/* → app_config → project → cli
 ```
 
 | Module | Concern |
@@ -66,12 +66,14 @@ common → store / tmpfs / llm_backend → app_config → project → cli
 | `common` | Cross-cutting foundations: the `AddaDevError` root exception and the strict Pydantic base model |
 | `store` | The on-disk config store: config-directory resolution, safe file-name validation, and TOML load+validate |
 | `tmpfs` | tmpfs sizing value objects and their override merge |
-| `llm_backend` | LLM backend vocabulary: the backend enum, per-vendor config, and the registry |
-| `app_config` | The `AppConfig` entity — host settings, backend registry, and project defaults |
+| `credentials` | `SecretStore` protocol, `KeyringSecretStore` implementation, `Secret` ABC, and `SecretError` |
+| `github` | `GitHubFileModel` DTO (TOML schema) and `GitHub` domain model (owns credential retrieval) |
+| `llm/` | LLM backend sub-package: `LlmBackend` enum, `LlmConfig` DTO, `resolve_backend()`; submodules `anthropic` and `deepseek` each hold a config DTO and a frozen domain model |
+| `app_config` | The `AppConfig` entity — host settings, LLM config registry, and project defaults |
 | `project` | The `Project` domain entity — file schema, resolution, and registry load |
-| `cli` | Typer entry point |
+| `cli` | Typer entry point and composition root |
 
-The later layers of the launcher — credentials, container/network execution, tmux session management, and the run command — extend this graph as they are built.
+The later layers of the launcher — container/network execution and tmux session management — extend this graph as they are built.
 
 ---
 
