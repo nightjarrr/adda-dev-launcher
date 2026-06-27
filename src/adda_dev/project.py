@@ -4,20 +4,15 @@ Project domain entity: file schema, resolution, and load from the registry.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
-
-from pydantic import Field
 
 from .app_config import ProjectDefaults
 from .common import AddaDevError, StrictModel
-from .llm_backend import LlmBackend
+from .github import GitHub, GitHubFileModel
+from .llm import LlmBackend
 from .store import load_toml, resolve_config_dir, validate_file_name
 from .tmpfs import TmpfsOverride, TmpfsSizes
 
 PROJECTS_DIR_NAME = "projects"
-
-# GitHub owner/repo name: letters, digits, hyphens, underscores, dots.
-_GH_NAME_PATTERN = r"^[A-Za-z0-9._-]+$"
 
 
 class ProjectNotFoundError(AddaDevError):
@@ -27,10 +22,8 @@ class ProjectNotFoundError(AddaDevError):
 class ProjectFileModel(StrictModel):
     """Serialized form of a project file; carries optional tmpfs overrides."""
 
-    owner: Annotated[str, Field(pattern=_GH_NAME_PATTERN)]
-    repo: Annotated[str, Field(pattern=_GH_NAME_PATTERN)]
+    github: GitHubFileModel
     image: str
-    github_keyring_key: str
     backend: LlmBackend
     tmpfs: TmpfsOverride | None = None
 
@@ -40,10 +33,8 @@ class Project:
     """Resolved project domain model; all fields are required and fully typed."""
 
     name: str
-    owner: str
-    repo: str
+    github: GitHub
     image: str
-    github_keyring_key: str
     backend: LlmBackend
     tmpfs: TmpfsSizes
 
@@ -54,10 +45,8 @@ class Project:
         """Resolve a ProjectFileModel against ProjectDefaults into a fully-resolved Project."""
         return cls(
             name=name,
-            owner=file.owner,
-            repo=file.repo,
+            github=GitHub(owner=file.github.owner, repo=file.github.repo, secret_name=file.github.secret_name),
             image=file.image,
-            github_keyring_key=file.github_keyring_key,
             backend=file.backend,
             tmpfs=defaults.tmpfs.with_override(file.tmpfs),
         )

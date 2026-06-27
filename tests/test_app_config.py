@@ -52,8 +52,8 @@ def test_app_config_defaults() -> None:
     assert cfg.envoy_image == DEFAULT_ENVOY_IMAGE
     assert cfg.envoy_image == "envoyproxy/envoy:v1.33.14"
     assert cfg.tmux_config_path is None
-    assert cfg.llm.anthropic.keyring_key == "oauth"
-    assert cfg.llm.deepseek.keyring_key == "apikey"
+    assert cfg.llm.anthropic.secret_name == "oauth"
+    assert cfg.llm.deepseek.secret_name == "apikey"
     assert cfg.project_defaults.tmpfs.home == "512m"
 
 
@@ -86,19 +86,19 @@ def test_app_config_load_missing_file_returns_defaults(tmp_path: Path) -> None:
 def test_app_config_load_valid_file(tmp_path: Path) -> None:
     config_file = tmp_path / "config.toml"
     config_file.write_text(
-        'container_engine = "podman"\nenvoy_image = "envoyproxy/envoy:v1.34.0"\n[llm.deepseek]\nkeyring_key = "ds-key"\n'
+        'container_engine = "podman"\nenvoy_image = "envoyproxy/envoy:v1.34.0"\n[llm.deepseek]\nsecret_name = "ds-key"\n'
     )
     cfg = AppConfig.load(config_dir=tmp_path)
     assert cfg.container_engine == ContainerEngine.podman
     assert cfg.envoy_image == "envoyproxy/envoy:v1.34.0"
-    assert cfg.llm.deepseek.keyring_key == "ds-key"
+    assert cfg.llm.deepseek.secret_name == "ds-key"
 
 
 def test_app_config_load_from_static_fixture() -> None:
     cfg = AppConfig.load(config_dir=DATA_DIR)
     assert cfg.container_engine == ContainerEngine.podman
     assert cfg.envoy_image == "envoyproxy/envoy:v1.34.0"
-    assert cfg.llm.deepseek.keyring_key == "ds-key"
+    assert cfg.llm.deepseek.secret_name == "ds-key"
     assert cfg.project_defaults.tmpfs.home == "1g"
 
 
