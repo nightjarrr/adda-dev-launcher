@@ -55,23 +55,53 @@ New work is measured against these.
 
 ## 4. Package layout
 
-Source lives under `src/adda_dev/`. Modules form a one-way dependency graph, each owning one concern:
+Source lives under `src/adda_dev/`. The structure follows **Onion Architecture**: three concentric rings with a strict inward-only import rule.
 
-```
-common → store / tmpfs / credentials → github / llm/* → app_config → project → cli
-```
+### Rings
 
-| Module | Concern |
-|---|---|
-| `common` | Cross-cutting foundations: the `AddaDevError` root exception and the strict Pydantic base model |
-| `store` | The on-disk config store: config-directory resolution, safe file-name validation, and TOML load+validate |
-| `tmpfs` | tmpfs sizing value objects and their override merge |
-| `credentials` | `SecretStore` protocol, `KeyringSecretStore` implementation, `Secret` ABC, and `SecretError` |
-| `github` | `GitHubFileModel` DTO (TOML schema) and `GitHub` domain model (owns credential retrieval) |
-| `llm/` | LLM backend sub-package: `LlmBackend` enum, `LlmConfig` DTO, `resolve_backend()`; submodules `anthropic` and `deepseek` each hold a config DTO and a frozen domain model |
-| `app_config` | The `AppConfig` entity — host settings, LLM config registry, and project defaults |
-| `project` | The `Project` domain entity — file schema, resolution, and registry load |
-| `cli` | Typer entry point and composition root |
+**Shared kernel — `common.py`**
+Cross-cutting foundations with no ring-specific concepts: `AddaDevError` root exception and `StrictModel` Pydantic base. May be imported by any ring.
+
+**Domain ring — `domain/`**
+Pure domain entities, value objects, and domain ports. No infrastructure dependencies.
+
+Import rule: `domain/` imports only `common` and other `domain/` modules. It never imports `app/` or `infra/`.
+
+**Application Services ring — `app/`**
+Use cases that orchestrate domain entities. May import `domain/`.
+
+Import rule: `app/` imports `domain/` and `common`. It never imports `infra/`.
+
+**Infrastructure ring — `infra/`**
+Filesystem I/O, external adapters (keyring), TOML parsing, CLI delivery mechanism, and the composition root. May import `domain/`, `app/`, and `common`.
+
+Import rule: `infra/` is the outermost ring — it may import any other ring. Nothing imports `infra/` from an inner ring.
+
+### Composition root
+
+`infra/cli.py` is the composition root. It creates the `KeyringSecretSource` adapter, loads configuration, resolves domain entities, and wires them into the use case. The composition root is the only place where all rings meet.
+
+### Port pattern
+
+The credential port (`SecretSource` ABC, in `domain/credentials.py`) lets domain entities retrieve secrets without depending on the keyring library. The Infrastructure ring provides `KeyringSecretSource` as the production adapter; tests provide `FakeSecretSource`. The same pattern applies to future ports for container execution and session display (#59, #60).
+
+### Module table
+
+| Module | Ring | Concern |
+|---|---|---|
+| `common` | Shared kernel | `AddaDevError` root exception and `StrictModel` Pydantic base |
+| `domain/tmpfs` | Domain | tmpfs sizing value objects and their override merge |
+| `domain/credentials` | Domain | `SecretSource` port, `Secret` ABC, `SecretError` |
+| `domain/github` | Domain | `GitHub` domain model (credential retrieval via `SecretSource`) |
+| `domain/llm` | Domain | `LlmBackend` enum, `AnthropicBackend`, `DeepSeekBackend` frozen dataclasses |
+| `domain/project` | Domain | `Project` domain entity and `ProjectNotFoundError` |
+| `app/run` | Application | `run_session()` use case: retrieve credentials and display session info |
+| `infra/store` | Infrastructure | Config-directory resolution, safe file-name validation, TOML load+validate |
+| `infra/keyring_source` | Infrastructure | `KeyringSecretSource` — OS keyring adapter for the `SecretSource` port |
+| `infra/llm` | Infrastructure | LLM config DTOs (`AnthropicConfigModel`, `DeepSeekConfigModel`, `LlmConfig`) and `resolve_backend()` |
+| `infra/config` | Infrastructure | Host config DTOs (`AppConfig`, `ProjectDefaults`, `ContainerEngine`) and `load_app_config()` |
+| `infra/project` | Infrastructure | Project file DTOs (`ProjectFileModel`, `GitHubFileModel`) and `load_project()` |
+| `infra/cli` | Infrastructure | Typer entry point and composition root |
 
 The later layers of the launcher — container/network execution and tmux session management — extend this graph as they are built.
 

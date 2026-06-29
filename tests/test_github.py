@@ -1,12 +1,14 @@
 """
-Tests for github.py: GitHubFileModel validation and GitHub domain model.
+Tests for domain/github.py: GitHub domain model.
+Tests for infra/project.py: GitHubFileModel validation.
 """
 
 import pytest
 
-from adda_dev.credentials import SecretError
-from adda_dev.github import GitHub, GitHubFileModel
-from tests.test_credentials import FakeSecretStore
+from adda_dev.domain.credentials import SecretError
+from adda_dev.domain.github import GitHub
+from adda_dev.infra.project import GitHubFileModel
+from tests.conftest import FakeSecretSource
 
 # ---------------------------------------------------------------------------
 # GitHubFileModel — valid inputs
@@ -86,19 +88,19 @@ def test_github_file_model_extra_key_rejected() -> None:
 
 
 # ---------------------------------------------------------------------------
-# GitHub — domain model with injected FakeSecretStore
+# GitHub — domain model with injected FakeSecretSource
 # ---------------------------------------------------------------------------
 
 
 def test_github_get_secret_returns_value() -> None:
-    fake = FakeSecretStore({("adda-dev:github", "demo-token"): "ghp_abc123"})
-    gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="demo-token", store=fake)
+    fake = FakeSecretSource({("adda-dev:github", "demo-token"): "ghp_abc123"})
+    gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="demo-token", source=fake)
     assert gh.get_secret() == "ghp_abc123"
 
 
 def test_github_get_secret_raises_on_missing() -> None:
-    fake = FakeSecretStore()
-    gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="demo-token", store=fake)
+    fake = FakeSecretSource()
+    gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="demo-token", source=fake)
     with pytest.raises(SecretError):
         gh.get_secret()
 
@@ -108,7 +110,7 @@ def test_github_service_namespace() -> None:
 
 
 def test_github_frozen_dataclass() -> None:
-    fake = FakeSecretStore()
-    gh = GitHub(owner="a", repo="b", secret_name="k", store=fake)
+    fake = FakeSecretSource()
+    gh = GitHub(owner="a", repo="b", secret_name="k", source=fake)
     with pytest.raises(Exception):
         gh.owner = "changed"  # type: ignore[misc]

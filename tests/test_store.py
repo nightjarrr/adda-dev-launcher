@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from adda_dev.common import StrictModel
-from adda_dev.store import (
+from adda_dev.infra.store import (
     InvalidFileNameError,
     SchemaValidationError,
     TomlParseError,

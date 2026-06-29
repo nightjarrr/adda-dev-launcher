@@ -1,12 +1,13 @@
 """
-Tests for llm/__init__.py: LlmBackend enum, LlmConfig defaults, resolve_backend().
+Tests for domain/llm.py: LlmBackend enum.
+Tests for infra/llm.py: LlmConfig defaults, resolve_backend().
 """
 
 import pytest
 
-from adda_dev.llm import LlmBackend, LlmConfig, resolve_backend
-from adda_dev.llm.anthropic import AnthropicBackend, AnthropicConfigModel
-from adda_dev.llm.deepseek import DeepSeekBackend, DeepSeekConfigModel
+from adda_dev.domain.llm import AnthropicBackend, DeepSeekBackend, LlmBackend
+from adda_dev.infra.llm import AnthropicConfigModel, DeepSeekConfigModel, LlmConfig, resolve_backend
+from tests.conftest import FakeSecretSource
 
 # ---------------------------------------------------------------------------
 # LlmBackend enum
@@ -58,28 +59,32 @@ def test_llm_config_partial_override() -> None:
 
 
 def test_resolve_backend_anthropic_returns_anthropic_backend() -> None:
+    fake = FakeSecretSource()
     cfg = LlmConfig()
-    result = resolve_backend(LlmBackend.anthropic, cfg)
+    result = resolve_backend(LlmBackend.anthropic, cfg, fake)
     assert isinstance(result, AnthropicBackend)
     assert result.secret_name == "oauth"
 
 
 def test_resolve_backend_deepseek_returns_deepseek_backend() -> None:
+    fake = FakeSecretSource()
     cfg = LlmConfig()
-    result = resolve_backend(LlmBackend.deepseek, cfg)
+    result = resolve_backend(LlmBackend.deepseek, cfg, fake)
     assert isinstance(result, DeepSeekBackend)
     assert result.secret_name == "apikey"
 
 
 def test_resolve_backend_anthropic_uses_config() -> None:
+    fake = FakeSecretSource()
     cfg = LlmConfig.model_validate({"anthropic": {"secret_name": "custom-oauth"}})
-    result = resolve_backend(LlmBackend.anthropic, cfg)
+    result = resolve_backend(LlmBackend.anthropic, cfg, fake)
     assert isinstance(result, AnthropicBackend)
     assert result.secret_name == "custom-oauth"
 
 
 def test_resolve_backend_deepseek_uses_config() -> None:
+    fake = FakeSecretSource()
     cfg = LlmConfig.model_validate({"deepseek": {"secret_name": "custom-ds"}})
-    result = resolve_backend(LlmBackend.deepseek, cfg)
+    result = resolve_backend(LlmBackend.deepseek, cfg, fake)
     assert isinstance(result, DeepSeekBackend)
     assert result.secret_name == "custom-ds"

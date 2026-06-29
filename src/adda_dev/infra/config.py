@@ -1,14 +1,14 @@
 """
-Application configuration entity: host settings, backend registry, and project defaults.
+Application configuration: host settings DTOs and load_app_config().
 """
 
 from enum import StrEnum
 from pathlib import Path
 
-from .common import StrictModel
+from ..common import StrictModel
+from ..domain.tmpfs import TmpfsSizes
 from .llm import LlmConfig
 from .store import load_toml, resolve_config_dir
-from .tmpfs import TmpfsSizes
 
 CONFIG_FILE_NAME = "config.toml"
 DEFAULT_ENVOY_IMAGE = "envoyproxy/envoy:v1.33.14"
@@ -39,13 +39,11 @@ class AppConfig(StrictModel):
     llm: LlmConfig = LlmConfig()
     project_defaults: ProjectDefaults = ProjectDefaults()
 
-    # Public methods
 
-    @classmethod
-    def load(cls, config_dir: Path | None = None) -> AppConfig:
-        """Load AppConfig from config.toml; return defaults if the file is absent."""
-        cd = config_dir if config_dir is not None else resolve_config_dir()
-        path = cd / CONFIG_FILE_NAME
-        if not path.exists():
-            return cls()
-        return load_toml(path, cls)
+def load_app_config(config_dir: Path | None = None) -> AppConfig:
+    """Load AppConfig from config.toml; return defaults if the file is absent."""
+    cd = config_dir if config_dir is not None else resolve_config_dir()
+    path = cd / CONFIG_FILE_NAME
+    if not path.exists():
+        return AppConfig()
+    return load_toml(path, AppConfig)

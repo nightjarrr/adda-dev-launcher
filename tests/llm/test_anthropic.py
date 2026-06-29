@@ -1,12 +1,14 @@
 """
-Tests for llm/anthropic.py: AnthropicConfigModel and AnthropicBackend.
+Tests for domain/llm.py: AnthropicBackend.
+Tests for infra/llm.py: AnthropicConfigModel.
 """
 
 import pytest
 
-from adda_dev.credentials import SecretError
-from adda_dev.llm.anthropic import AnthropicBackend, AnthropicConfigModel
-from tests.test_credentials import FakeSecretStore
+from adda_dev.domain.credentials import SecretError
+from adda_dev.domain.llm import AnthropicBackend
+from adda_dev.infra.llm import AnthropicConfigModel
+from tests.conftest import FakeSecretSource
 
 # ---------------------------------------------------------------------------
 # AnthropicConfigModel — defaults and validation
@@ -29,27 +31,19 @@ def test_anthropic_config_model_extra_field_rejected() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AnthropicBackend — from_config and get_secret
+# AnthropicBackend — construction and get_secret
 # ---------------------------------------------------------------------------
 
 
-def test_anthropic_backend_from_config_uses_secret_name() -> None:
-    cfg = AnthropicConfigModel(secret_name="my-oauth")
-    backend = AnthropicBackend.from_config(cfg)
-    assert backend.secret_name == "my-oauth"
-
-
 def test_anthropic_backend_get_secret_returns_value() -> None:
-    fake = FakeSecretStore({("adda-dev:anthropic", "oauth"): "claude-token"})
-    cfg = AnthropicConfigModel()
-    # Inject store by constructing directly since from_config uses default_factory.
-    backend_with_store = AnthropicBackend(secret_name=cfg.secret_name, store=fake)
-    assert backend_with_store.get_secret() == "claude-token"
+    fake = FakeSecretSource({("adda-dev:anthropic", "oauth"): "claude-token"})
+    backend = AnthropicBackend(secret_name="oauth", source=fake)
+    assert backend.get_secret() == "claude-token"
 
 
 def test_anthropic_backend_get_secret_raises_on_missing() -> None:
-    fake = FakeSecretStore()
-    backend = AnthropicBackend(secret_name="oauth", store=fake)
+    fake = FakeSecretSource()
+    backend = AnthropicBackend(secret_name="oauth", source=fake)
     with pytest.raises(SecretError):
         backend.get_secret()
 
@@ -59,6 +53,7 @@ def test_anthropic_backend_service_namespace() -> None:
 
 
 def test_anthropic_backend_frozen() -> None:
-    backend = AnthropicBackend(secret_name="oauth")
+    fake = FakeSecretSource()
+    backend = AnthropicBackend(secret_name="oauth", source=fake)
     with pytest.raises(Exception):
         backend.secret_name = "changed"  # type: ignore[misc]

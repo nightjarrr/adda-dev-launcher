@@ -6,7 +6,7 @@ from typing import Annotated
 
 from pydantic import Field, field_validator
 
-from .common import StrictModel
+from ..common import StrictModel
 
 # Pattern for a valid size string: digits optionally followed by a single unit char.
 _SIZE_PATTERN = r"^\d+[bkmgBKMG]?$"

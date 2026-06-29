@@ -1,53 +1,38 @@
 """
-Tests for credentials.py: SecretStore protocol, KeyringSecretStore, Secret ABC.
+Tests for domain/credentials.py: SecretSource protocol, Secret ABC, SecretError.
+Tests for infra/keyring_source.py: KeyringSecretSource.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
 
-from adda_dev.credentials import KeyringSecretStore, Secret, SecretError, SecretStore
+from adda_dev.domain.credentials import Secret, SecretError, SecretSource
+from adda_dev.infra.keyring_source import KeyringSecretSource
+from tests.conftest import FakeSecretSource
 
 # ---------------------------------------------------------------------------
-# FakeSecretStore — test double for SecretStore
-# ---------------------------------------------------------------------------
-
-
-class FakeSecretStore(SecretStore):
-    """SecretStore test double backed by a dict."""
-
-    def __init__(self, secrets: dict[tuple[str, str], str] | None = None) -> None:
-        self._secrets: dict[tuple[str, str], str] = secrets or {}
-
-    def get(self, service: str, key: str) -> str:
-        value = self._secrets.get((service, key))
-        if value is None:
-            raise SecretError(f"No secret for {service!r}/{key!r}")
-        return value
-
-
-# ---------------------------------------------------------------------------
-# KeyringSecretStore
+# KeyringSecretSource
 # ---------------------------------------------------------------------------
 
 
-def test_keyring_secret_store_returns_value_when_found() -> None:
-    with patch("adda_dev.credentials.keyring.get_password", return_value="my-token"):
-        store = KeyringSecretStore()
+def test_keyring_secret_source_returns_value_when_found() -> None:
+    with patch("adda_dev.infra.keyring_source.keyring.get_password", return_value="my-token"):
+        store = KeyringSecretSource()
         assert store.get("svc", "key") == "my-token"
 
 
-def test_keyring_secret_store_raises_secret_error_when_not_found() -> None:
-    with patch("adda_dev.credentials.keyring.get_password", return_value=None):
-        store = KeyringSecretStore()
+def test_keyring_secret_source_raises_secret_error_when_not_found() -> None:
+    with patch("adda_dev.infra.keyring_source.keyring.get_password", return_value=None):
+        store = KeyringSecretSource()
         with pytest.raises(SecretError, match="No secret for 'svc'/'key'"):
             store.get("svc", "key")
 
 
 # ---------------------------------------------------------------------------
-# Secret ABC — concrete subclass via FakeSecretStore injection
+# Secret ABC — concrete subclass via FakeSecretSource injection
 # ---------------------------------------------------------------------------
 
 
@@ -56,18 +41,18 @@ class _ConcreteSecret(Secret):
     _service: ClassVar[str] = "test-service"
 
     secret_name: str
-    store: SecretStore = field(default_factory=KeyringSecretStore, repr=False, compare=False)
+    source: SecretSource
 
 
 def test_secret_get_secret_returns_value() -> None:
-    fake = FakeSecretStore({("test-service", "my-key"): "secret-value"})
-    obj = _ConcreteSecret(secret_name="my-key", store=fake)
+    fake = FakeSecretSource({("test-service", "my-key"): "secret-value"})
+    obj = _ConcreteSecret(secret_name="my-key", source=fake)
     assert obj.get_secret() == "secret-value"
 
 
 def test_secret_get_secret_raises_when_missing() -> None:
-    fake = FakeSecretStore()
-    obj = _ConcreteSecret(secret_name="missing-key", store=fake)
+    fake = FakeSecretSource()
+    obj = _ConcreteSecret(secret_name="missing-key", source=fake)
     with pytest.raises(SecretError):
         obj.get_secret()
 

@@ -1,12 +1,14 @@
 """
-Tests for llm/deepseek.py: DeepSeekConfigModel and DeepSeekBackend.
+Tests for domain/llm.py: DeepSeekBackend.
+Tests for infra/llm.py: DeepSeekConfigModel.
 """
 
 import pytest
 
-from adda_dev.credentials import SecretError
-from adda_dev.llm.deepseek import DeepSeekBackend, DeepSeekConfigModel
-from tests.test_credentials import FakeSecretStore
+from adda_dev.domain.credentials import SecretError
+from adda_dev.domain.llm import DeepSeekBackend
+from adda_dev.infra.llm import DeepSeekConfigModel
+from tests.conftest import FakeSecretSource
 
 # ---------------------------------------------------------------------------
 # DeepSeekConfigModel — defaults (verbatim from adda-dev.sh)
@@ -36,13 +38,39 @@ def test_deepseek_config_model_extra_field_rejected() -> None:
 
 
 # ---------------------------------------------------------------------------
-# DeepSeekBackend — from_config and get_secret
+# DeepSeekBackend — construction and get_secret
 # ---------------------------------------------------------------------------
 
 
-def test_deepseek_backend_from_config_maps_all_fields() -> None:
+def _make_deepseek_backend(fake: FakeSecretSource, secret_name: str = "apikey") -> DeepSeekBackend:
+    cfg = DeepSeekConfigModel(secret_name=secret_name)
+    return DeepSeekBackend(
+        secret_name=cfg.secret_name,
+        base_url=cfg.base_url,
+        model=cfg.model,
+        opus_model=cfg.opus_model,
+        sonnet_model=cfg.sonnet_model,
+        haiku_model=cfg.haiku_model,
+        subagent_model=cfg.subagent_model,
+        effort_level=cfg.effort_level,
+        source=fake,
+    )
+
+
+def test_deepseek_backend_fields_map_from_config() -> None:
+    fake = FakeSecretSource()
     cfg = DeepSeekConfigModel(secret_name="ds-key")
-    backend = DeepSeekBackend.from_config(cfg)
+    backend = DeepSeekBackend(
+        secret_name=cfg.secret_name,
+        base_url=cfg.base_url,
+        model=cfg.model,
+        opus_model=cfg.opus_model,
+        sonnet_model=cfg.sonnet_model,
+        haiku_model=cfg.haiku_model,
+        subagent_model=cfg.subagent_model,
+        effort_level=cfg.effort_level,
+        source=fake,
+    )
     assert backend.secret_name == "ds-key"
     assert backend.base_url == "https://api.deepseek.com/anthropic"
     assert backend.model == "deepseek-v4-flash"
@@ -54,36 +82,14 @@ def test_deepseek_backend_from_config_maps_all_fields() -> None:
 
 
 def test_deepseek_backend_get_secret_returns_value() -> None:
-    fake = FakeSecretStore({("adda-dev:deepseek", "apikey"): "ds-token"})
-    backend = DeepSeekBackend.from_config(DeepSeekConfigModel())
-    backend_with_store = DeepSeekBackend(
-        secret_name=backend.secret_name,
-        base_url=backend.base_url,
-        model=backend.model,
-        opus_model=backend.opus_model,
-        sonnet_model=backend.sonnet_model,
-        haiku_model=backend.haiku_model,
-        subagent_model=backend.subagent_model,
-        effort_level=backend.effort_level,
-        store=fake,
-    )
-    assert backend_with_store.get_secret() == "ds-token"
+    fake = FakeSecretSource({("adda-dev:deepseek", "apikey"): "ds-token"})
+    backend = _make_deepseek_backend(fake)
+    assert backend.get_secret() == "ds-token"
 
 
 def test_deepseek_backend_get_secret_raises_on_missing() -> None:
-    fake = FakeSecretStore()
-    cfg = DeepSeekConfigModel()
-    backend = DeepSeekBackend(
-        secret_name=cfg.secret_name,
-        base_url=cfg.base_url,
-        model=cfg.model,
-        opus_model=cfg.opus_model,
-        sonnet_model=cfg.sonnet_model,
-        haiku_model=cfg.haiku_model,
-        subagent_model=cfg.subagent_model,
-        effort_level=cfg.effort_level,
-        store=fake,
-    )
+    fake = FakeSecretSource()
+    backend = _make_deepseek_backend(fake)
     with pytest.raises(SecretError):
         backend.get_secret()
 
@@ -93,7 +99,7 @@ def test_deepseek_backend_service_namespace() -> None:
 
 
 def test_deepseek_backend_frozen() -> None:
-    cfg = DeepSeekConfigModel()
-    backend = DeepSeekBackend.from_config(cfg)
+    fake = FakeSecretSource()
+    backend = _make_deepseek_backend(fake)
     with pytest.raises(Exception):
         backend.secret_name = "changed"  # type: ignore[misc]
