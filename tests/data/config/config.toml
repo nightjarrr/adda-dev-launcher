@@ -5,4 +5,4 @@ envoy_image = "envoyproxy/envoy:v1.34.0"
 home = "1g"
 
 [llm.deepseek]
-keyring_key = "ds-key"
+secret_name = "ds-key"

@@ -6,7 +6,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from .common import StrictModel
-from .llm_backend import LlmBackends
+from .llm import LlmConfig
 from .store import load_toml, resolve_config_dir
 from .tmpfs import TmpfsSizes
 
@@ -36,7 +36,7 @@ class AppConfig(StrictModel):
     container_engine: ContainerEngine = ContainerEngine.docker
     envoy_image: str = DEFAULT_ENVOY_IMAGE
     tmux_config_path: Path | None = None
-    llm: LlmBackends = LlmBackends()
+    llm: LlmConfig = LlmConfig()
     project_defaults: ProjectDefaults = ProjectDefaults()
 
     # Public methods

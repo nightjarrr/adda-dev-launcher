@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from adda_dev.app_config import AppConfig, ProjectDefaults
-from adda_dev.llm_backend import LlmBackend
+from adda_dev.github import GitHub
+from adda_dev.llm import LlmBackend
 from adda_dev.project import PROJECTS_DIR_NAME, Project, ProjectFileModel, ProjectNotFoundError
 from adda_dev.store import InvalidFileNameError, SchemaValidationError, TomlParseError
 
@@ -27,17 +28,15 @@ _CUSTOM_DEFAULTS = ProjectDefaults.model_validate({"tmpfs": {"home": "1g", "work
 
 def _valid_file_data() -> dict[str, object]:
     return {
-        "owner": "nightjarrr",
-        "repo": "adda-dev-launcher",
+        "github": {"owner": "nightjarrr", "repo": "adda-dev-launcher", "secret_name": "demo-token"},
         "image": "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0",
-        "github_keyring_key": "demo-token",
         "backend": "deepseek",
     }
 
 
 def test_project_file_model_valid_minimal() -> None:
     pf = ProjectFileModel.model_validate(_valid_file_data())
-    assert pf.owner == "nightjarrr"
+    assert pf.github.owner == "nightjarrr"
     assert pf.backend == LlmBackend.deepseek
     assert pf.tmpfs is None
 
@@ -51,16 +50,9 @@ def test_project_file_model_valid_with_tmpfs() -> None:
     assert pf.tmpfs.home is None
 
 
-def test_project_file_model_missing_owner_rejected() -> None:
+def test_project_file_model_missing_github_rejected() -> None:
     data = _valid_file_data()
-    del data["owner"]
-    with pytest.raises(Exception):
-        ProjectFileModel.model_validate(data)
-
-
-def test_project_file_model_missing_repo_rejected() -> None:
-    data = _valid_file_data()
-    del data["repo"]
+    del data["github"]
     with pytest.raises(Exception):
         ProjectFileModel.model_validate(data)
 
@@ -79,30 +71,9 @@ def test_project_file_model_missing_image_rejected() -> None:
         ProjectFileModel.model_validate(data)
 
 
-def test_project_file_model_missing_github_keyring_key_rejected() -> None:
-    data = _valid_file_data()
-    del data["github_keyring_key"]
-    with pytest.raises(Exception):
-        ProjectFileModel.model_validate(data)
-
-
 def test_project_file_model_unknown_key_rejected() -> None:
     data = _valid_file_data()
     data["unknown"] = "value"
-    with pytest.raises(Exception):
-        ProjectFileModel.model_validate(data)
-
-
-def test_project_file_model_bad_owner_rejected() -> None:
-    data = _valid_file_data()
-    data["owner"] = "bad/owner"
-    with pytest.raises(Exception):
-        ProjectFileModel.model_validate(data)
-
-
-def test_project_file_model_bad_repo_rejected() -> None:
-    data = _valid_file_data()
-    data["repo"] = "bad repo"
     with pytest.raises(Exception):
         ProjectFileModel.model_validate(data)
 
@@ -112,14 +83,6 @@ def test_project_file_model_invalid_backend_rejected() -> None:
     data["backend"] = "openai"
     with pytest.raises(Exception):
         ProjectFileModel.model_validate(data)
-
-
-def test_project_file_model_owner_with_dot_accepted() -> None:
-    # GitHub owner/repo may contain dots — unrelated to the registry slug constraint.
-    data = _valid_file_data()
-    data["repo"] = "my.repo"
-    pf = ProjectFileModel.model_validate(data)
-    assert pf.repo == "my.repo"
 
 
 # ---------------------------------------------------------------------------
@@ -185,19 +148,25 @@ def test_project_from_file_partial_tmpfs_override_home_only() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Project._from_file — identity fields pass through
+# Project._from_file — github and identity fields pass through
 # ---------------------------------------------------------------------------
 
 
-def test_project_from_file_identity_fields() -> None:
+def test_project_from_file_github_fields() -> None:
     pf = ProjectFileModel.model_validate(_valid_file_data())
     proj = Project._from_file("myproj", pf, _DEFAULTS)
     assert proj.name == "myproj"
-    assert proj.owner == "nightjarrr"
-    assert proj.repo == "adda-dev-launcher"
+    assert proj.github.owner == "nightjarrr"
+    assert proj.github.repo == "adda-dev-launcher"
+    assert proj.github.secret_name == "demo-token"
     assert proj.image == "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"
-    assert proj.github_keyring_key == "demo-token"
     assert proj.backend == LlmBackend.deepseek
+
+
+def test_project_from_file_constructs_github_domain_model() -> None:
+    pf = ProjectFileModel.model_validate(_valid_file_data())
+    proj = Project._from_file("demo", pf, _DEFAULTS)
+    assert isinstance(proj.github, GitHub)
 
 
 # ---------------------------------------------------------------------------
@@ -209,11 +178,12 @@ def test_project_load_valid(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     proj_file = tmp_path / "projects" / "demo.toml"
     proj_file.write_text(
+        'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
+        'backend = "anthropic"\n'
+        "[github]\n"
         'owner = "nightjarrr"\n'
         'repo = "adda-dev-launcher"\n'
-        'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
-        'github_keyring_key = "demo-token"\n'
-        'backend = "anthropic"\n'
+        'secret_name = "demo-token"\n'
     )
     proj = Project.load("demo", _DEFAULTS, config_dir=tmp_path)
     assert proj.name == "demo"
@@ -229,6 +199,9 @@ def test_project_load_from_static_fixture() -> None:
     # home and tmp from built-in defaults
     assert proj.tmpfs.home == "512m"
     assert proj.tmpfs.tmp == "256m"
+    assert proj.github.owner == "nightjarrr"
+    assert proj.github.repo == "adda-dev-launcher"
+    assert proj.github.secret_name == "demo-token"
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +212,9 @@ def test_project_load_from_static_fixture() -> None:
 def test_project_load_builds_correct_path(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     proj_file = tmp_path / "projects" / "myproj.toml"
-    proj_file.write_text('owner = "acme"\nrepo = "tool"\nimage = "img:v1"\ngithub_keyring_key = "k"\nbackend = "anthropic"\n')
+    proj_file.write_text(
+        'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
+    )
     proj = Project.load("myproj", _DEFAULTS, config_dir=tmp_path)
     assert proj.name == "myproj"
 
@@ -249,13 +224,13 @@ def test_project_load_uses_projects_dir_name_constant(tmp_path: Path) -> None:
     projects_subdir = tmp_path / PROJECTS_DIR_NAME
     projects_subdir.mkdir()
     (projects_subdir / "alpha.toml").write_text(
-        'owner = "acme"\nrepo = "tool"\nimage = "img:v1"\ngithub_keyring_key = "k"\nbackend = "anthropic"\n'
+        'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
     proj = Project.load("alpha", _DEFAULTS, config_dir=tmp_path)
     assert proj.name == "alpha"
     # A file placed outside PROJECTS_DIR_NAME is not found.
     (tmp_path / "alpha.toml").write_text(
-        'owner = "acme"\nrepo = "tool"\nimage = "img:v1"\ngithub_keyring_key = "k"\nbackend = "anthropic"\n'
+        'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
     with pytest.raises(ProjectNotFoundError):
         Project.load("alpha", _DEFAULTS, config_dir=projects_subdir)
@@ -318,12 +293,13 @@ def test_project_load_unknown_key_raises_schema_validation_error(tmp_path: Path)
     (tmp_path / "projects").mkdir()
     proj_file = tmp_path / "projects" / "extra.toml"
     proj_file.write_text(
-        'owner = "nightjarrr"\n'
-        'repo = "adda-dev-launcher"\n'
         'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
-        'github_keyring_key = "demo-token"\n'
         'backend = "anthropic"\n'
         'unknown_key = "oops"\n'
+        "[github]\n"
+        'owner = "nightjarrr"\n'
+        'repo = "adda-dev-launcher"\n'
+        'secret_name = "demo-token"\n'
     )
     with pytest.raises(SchemaValidationError):
         Project.load("extra", _DEFAULTS, config_dir=tmp_path)
@@ -338,10 +314,11 @@ def test_project_load_missing_backend_raises_schema_validation_error(tmp_path: P
     (tmp_path / "projects").mkdir()
     proj_file = tmp_path / "projects" / "nobk.toml"
     proj_file.write_text(
+        'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
+        "[github]\n"
         'owner = "nightjarrr"\n'
         'repo = "adda-dev-launcher"\n'
-        'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
-        'github_keyring_key = "demo-token"\n'
+        'secret_name = "demo-token"\n'
     )
     with pytest.raises(SchemaValidationError):
         Project.load("nobk", _DEFAULTS, config_dir=tmp_path)
@@ -361,11 +338,12 @@ def test_integration_app_config_and_project_load(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     proj_file = tmp_path / "projects" / "myproj.toml"
     proj_file.write_text(
+        'image = "ghcr.io/acme/my-repo:v1.0.0"\n'
+        'backend = "anthropic"\n'
+        "[github]\n"
         'owner = "acme"\n'
         'repo = "my-repo"\n'
-        'image = "ghcr.io/acme/my-repo:v1.0.0"\n'
-        'github_keyring_key = "repo-token"\n'
-        'backend = "anthropic"\n'
+        'secret_name = "repo-token"\n'
         "[tmpfs]\n"
         'workspace = "4g"\n'
     )
@@ -377,3 +355,5 @@ def test_integration_app_config_and_project_load(tmp_path: Path) -> None:
     assert proj.tmpfs.workspace == "4g"
     assert proj.tmpfs.home == "2g"
     assert proj.tmpfs.tmp == "256m"
+    assert proj.github.owner == "acme"
+    assert proj.github.secret_name == "repo-token"

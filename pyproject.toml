@@ -59,6 +59,7 @@ branch = true
 fail_under = 95
 exclude_also = [
     "raise NotImplementedError",
+    "assert_never",
 ]
 
 [build-system]
