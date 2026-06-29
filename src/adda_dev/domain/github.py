@@ -7,9 +7,6 @@ from typing import ClassVar
 
 from .credentials import Secret, SecretSource
 
-# GitHub owner/repo name: letters, digits, hyphens, underscores, dots.
-_GH_NAME_PATTERN = r"^[A-Za-z0-9._-]+$"
-
 
 @dataclass(frozen=True)
 class GitHub(Secret):
