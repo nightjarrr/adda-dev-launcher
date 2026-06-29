@@ -1,3 +1,3 @@
 # Memory Index
 
-- [DDD architecture — adda-dev-launcher](project-ddd-architecture.md) — Active domain models, DTO naming (*FileModel/*ConfigModel), Secret/SecretStore abstraction, credential patterns, composition root. Governs all future launcher issues.
+- [Architecture design process — adda-dev-launcher](project-ddd-architecture.md) — How Onion Architecture was reached (#58 review); design-before-plan process note. Architecture itself is in docs/architecture.md (#68).
