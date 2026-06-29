@@ -1,17 +1,18 @@
-"""Tests for adda_dev.cli."""
+"""Tests for adda_dev.infra.cli."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from adda_dev.cli import app
-from adda_dev.credentials import SecretStore
-from adda_dev.github import GitHub
-from adda_dev.llm import LlmBackend, LlmConfig
-from adda_dev.llm.anthropic import AnthropicBackend
-from adda_dev.project import Project
-from tests.test_credentials import FakeSecretStore
+from adda_dev.domain.credentials import SecretSource
+from adda_dev.domain.github import GitHub
+from adda_dev.domain.llm import AnthropicBackend, LlmBackend
+from adda_dev.domain.project import Project
+from adda_dev.domain.tmpfs import TmpfsSizes
+from adda_dev.infra.cli import app
+from adda_dev.infra.llm import LlmConfig
+from tests.conftest import FakeSecretSource
 
 runner = CliRunner()
 
@@ -19,14 +20,12 @@ DATA_DIR = Path(__file__).parent / "data" / "config"
 
 
 # ---------------------------------------------------------------------------
-# Fixtures: a pre-built Project and backend with FakeSecretStore injected
+# Fixtures: a pre-built Project and backend with FakeSecretSource injected
 # ---------------------------------------------------------------------------
 
 
-def _make_project(store: SecretStore) -> Project:
-    from adda_dev.tmpfs import TmpfsSizes
-
-    gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="demo-token", store=store)
+def _make_project(source: SecretSource) -> Project:
+    gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="demo-token", source=source)
     return Project(
         name="demo",
         github=gh,
@@ -36,8 +35,8 @@ def _make_project(store: SecretStore) -> Project:
     )
 
 
-def _make_backend(store: SecretStore) -> AnthropicBackend:
-    return AnthropicBackend(secret_name="oauth", store=store)
+def _make_backend(source: SecretSource) -> AnthropicBackend:
+    return AnthropicBackend(secret_name="oauth", source=source)
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +45,7 @@ def _make_backend(store: SecretStore) -> AnthropicBackend:
 
 
 def test_run_prints_abbreviated_secrets_and_exits_0() -> None:
-    fake = FakeSecretStore(
+    fake = FakeSecretSource(
         {
             ("adda-dev:github", "demo-token"): "ghp_secret_token",
             ("adda-dev:anthropic", "oauth"): "claude_oauth_token",
@@ -60,9 +59,9 @@ def test_run_prints_abbreviated_secrets_and_exits_0() -> None:
     mock_config.llm = LlmConfig()
 
     with (
-        patch("adda_dev.app_config.AppConfig.load", return_value=mock_config),
-        patch("adda_dev.project.Project.load", return_value=proj),
-        patch("adda_dev.llm.resolve_backend", return_value=backend),
+        patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
+        patch("adda_dev.infra.cli.load_project", return_value=proj),
+        patch("adda_dev.infra.cli.resolve_backend", return_value=backend),
     ):
         result = runner.invoke(app, ["run", "demo"])
 
@@ -82,14 +81,14 @@ def test_run_no_project_name_exits_nonzero() -> None:
 
 
 def test_run_project_not_found_exits_1() -> None:
-    from adda_dev.project import ProjectNotFoundError
+    from adda_dev.domain.project import ProjectNotFoundError
 
     mock_config = MagicMock()
     mock_config.project_defaults = MagicMock()
 
     with (
-        patch("adda_dev.app_config.AppConfig.load", return_value=mock_config),
-        patch("adda_dev.project.Project.load", side_effect=ProjectNotFoundError("not found")),
+        patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
+        patch("adda_dev.infra.cli.load_project", side_effect=ProjectNotFoundError("not found")),
     ):
         result = runner.invoke(app, ["run", "nonexistent"])
 
@@ -103,7 +102,7 @@ def test_run_project_not_found_exits_1() -> None:
 
 
 def test_run_secret_error_exits_1() -> None:
-    empty_store = FakeSecretStore()
+    empty_store = FakeSecretSource()
     proj = _make_project(empty_store)
     backend = _make_backend(empty_store)
 
@@ -112,9 +111,9 @@ def test_run_secret_error_exits_1() -> None:
     mock_config.llm = LlmConfig()
 
     with (
-        patch("adda_dev.app_config.AppConfig.load", return_value=mock_config),
-        patch("adda_dev.project.Project.load", return_value=proj),
-        patch("adda_dev.llm.resolve_backend", return_value=backend),
+        patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
+        patch("adda_dev.infra.cli.load_project", return_value=proj),
+        patch("adda_dev.infra.cli.resolve_backend", return_value=backend),
     ):
         result = runner.invoke(app, ["run", "demo"])
 
@@ -128,7 +127,7 @@ def test_run_secret_error_exits_1() -> None:
 
 
 def test_run_with_issue_option_exits_0() -> None:
-    fake = FakeSecretStore(
+    fake = FakeSecretSource(
         {
             ("adda-dev:github", "demo-token"): "ghp_secret_token",
             ("adda-dev:anthropic", "oauth"): "claude_oauth_token",
@@ -142,9 +141,9 @@ def test_run_with_issue_option_exits_0() -> None:
     mock_config.llm = LlmConfig()
 
     with (
-        patch("adda_dev.app_config.AppConfig.load", return_value=mock_config),
-        patch("adda_dev.project.Project.load", return_value=proj),
-        patch("adda_dev.llm.resolve_backend", return_value=backend),
+        patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
+        patch("adda_dev.infra.cli.load_project", return_value=proj),
+        patch("adda_dev.infra.cli.resolve_backend", return_value=backend),
     ):
         result = runner.invoke(app, ["run", "demo", "--issue", "42"])
 

@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-adda-dev = "adda_dev.cli:app"
+adda-dev = "adda_dev.infra.cli:app"
 
 [dependency-groups]
 dev = [

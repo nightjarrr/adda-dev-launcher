@@ -5,7 +5,7 @@ TmpfsSizes.with_override merge logic.
 
 import pytest
 
-from adda_dev.tmpfs import TmpfsOverride, TmpfsSizes
+from adda_dev.domain.tmpfs import TmpfsOverride, TmpfsSizes
 
 # ---------------------------------------------------------------------------
 # TmpfsSizes — defaults

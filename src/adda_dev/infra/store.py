@@ -10,7 +10,7 @@ import tomlkit
 import tomlkit.exceptions
 from pydantic import BaseModel, ValidationError
 
-from .common import AddaDevError
+from ..common import AddaDevError
 
 # Valid registry slug: letters, digits, hyphens, underscores only — no dots or path separators.
 _NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
