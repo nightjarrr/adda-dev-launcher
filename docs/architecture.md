@@ -13,7 +13,43 @@ Adjacent documents, by viewpoint:
 
 ---
 
-## 2. Design principles
+## 2. Architectural foundations
+
+### Onion Architecture over a domain-driven model
+
+The launcher is structured using **Onion Architecture** applied to a **domain-driven** model. These are not independent choices — Onion Architecture is the structural mechanism that enforces what domain-driven design requires.
+
+**Domain-driven design** anchors the system's structure in its core problem: launching a configured dev session for a named project. The domain model captures what the system knows about that problem — what a project is, which backends exist, how credentials are scoped — independent of how that knowledge is acquired, stored, or delivered. A `Project` entity is the same object whether assembled from a TOML file, constructed by a test, or produced by a future API; its correctness does not depend on its origin.
+
+**Onion Architecture** enforces this structurally: the codebase is organised as concentric rings with one rule — dependencies always point inward. The domain model sits at the centre; infrastructure (TOML I/O, keyring, CLI delivery) sits at the outside. Infrastructure adapts to the domain; the domain never adapts to infrastructure. This is a structural guarantee, not a convention: a ring violation is a visible cross-ring import.
+
+### Domain model
+
+The domain for this system is the *session launch*: a named project running in a container image, authenticated against an LLM backend and a GitHub identity, with a configured tmpfs layout.
+
+**Entities** have identity that persists across invocations:
+- `Project` — identified by name; owns the selection of image, backend, and GitHub identity
+- `GitHub` — identified by `secret_name`; owns GitHub credential retrieval
+- `AnthropicBackend`, `DeepSeekBackend` — each identified by `secret_name`; each owns its credential retrieval
+
+**Value objects** are immutable, equal by value, with no independent identity:
+- `TmpfsSizes`, `TmpfsOverride` — the tmpfs layout and its per-project override
+
+**Domain port** — the domain defines one secondary port: `SecretSource`. Entities retrieve credentials through this interface without knowing whether the source is the OS keyring, a test double, or anything else. The domain owns the contract; infrastructure satisfies it.
+
+### Rings
+
+**Shared kernel** (`common.py`) — cross-cutting foundations importable by any ring: the root exception type and the strict-model Pydantic base.
+
+**Domain** (`domain/`) — the entities, value objects, and the `SecretSource` port described above. Contains no infrastructure dependencies. The stable centre the rest of the system is built around.
+
+**Application Services** (`app/`) — use-case orchestration: the sequence of domain operations that constitutes a launcher session. Imports domain; never imports infrastructure. This ring holds the *algorithm* of the launcher, decoupled from how it is invoked and how domain objects are assembled.
+
+**Infrastructure** (`infra/`) — everything that touches the outside world: TOML I/O, the OS keyring adapter, the CLI entry point, and the composition root that assembles the system from its parts. Imports any inner ring; nothing inner imports it.
+
+---
+
+## 3. Design principles
 
 New work is measured against these.
 
@@ -21,9 +57,9 @@ New work is measured against these.
 
 **Open for extension, closed for modification.** New behaviour is added through defined extension points rather than by editing existing code. The LLM backend model is the worked example: a new vendor is a new backend-config subclass plus an enum value and a registry entry — existing backends and the load path are untouched.
 
-**Explicit dependencies, no global state.** Components receive what they need as arguments rather than reaching for ambient state: load entry points take an injectable config directory, and a project is resolved against the project-defaults it is handed, not a global config object. There are no module-level singletons or shared mutable configuration. The run command will be the composition root that loads the entities and wires a session together.
+**Explicit dependencies, no global state.** Components receive what they need as arguments rather than reaching for ambient state: load entry points take an injectable config directory, and a project is resolved against the project-defaults it is handed, not a global config object. There are no module-level singletons or shared mutable configuration. The composition root (`infra/cli.py`) is the single place that assembles and wires everything together.
 
-**Configuration is data; a project is a domain entity.** `AppConfig` is a passive, validated value object describing the host. A `Project` is an active domain model whose TOML file is its *serialized state*; it uses configuration to resolve itself and to act, but it is not configuration. The two are never fused into a third "effective config" object — resolving a project against host defaults is the project's own behavior.
+**Configuration is data; a project is a domain entity.** `AppConfig` is a passive host-configuration value object. `Project` is a domain entity whose TOML file is its serialized state; it is not configuration. The two are never fused into a combined "effective config" — resolving a project against host defaults is the project's own behaviour.
 
 **Layered configuration, resolved downward.** Settings flow host → project → runtime; each layer overrides the one above, and per-invocation runtime overrides win. The launcher owns the host and project layers; the runtime layer arrives with the run command.
 
@@ -35,7 +71,7 @@ New work is measured against these.
 
 ---
 
-## 3. Technology choices
+## 4. Technology choices
 
 | Role | Choice | Rationale |
 |---|---|---|
@@ -53,29 +89,11 @@ New work is measured against these.
 
 ---
 
-## 4. Package layout
+## 5. Package layout
 
-Source lives under `src/adda_dev/`. The structure follows **Onion Architecture**: three concentric rings with a strict inward-only import rule.
+Source lives under `src/adda_dev/`. The ring structure defined in §2 maps directly to packages: `domain/`, `app/`, `infra/`, and `common.py` as the shared kernel.
 
-### Rings
-
-**Shared kernel — `common.py`**
-Cross-cutting foundations with no ring-specific concepts: `AddaDevError` root exception and `StrictModel` Pydantic base. May be imported by any ring.
-
-**Domain ring — `domain/`**
-Pure domain entities, value objects, and domain ports. No infrastructure dependencies.
-
-Import rule: `domain/` imports only `common` and other `domain/` modules. It never imports `app/` or `infra/`.
-
-**Application Services ring — `app/`**
-Use cases that orchestrate domain entities. May import `domain/`.
-
-Import rule: `app/` imports `domain/` and `common`. It never imports `infra/`.
-
-**Infrastructure ring — `infra/`**
-Filesystem I/O, external adapters (keyring), TOML parsing, CLI delivery mechanism, and the composition root. May import `domain/`, `app/`, and `common`.
-
-Import rule: `infra/` is the outermost ring — it may import any other ring. Nothing imports `infra/` from an inner ring.
+**Import rule:** dependencies always point inward. `domain/` imports only `common` and sibling `domain/` modules. `app/` adds `domain/`. `infra/` may import any ring. No inner ring imports `infra/`.
 
 ### Composition root
 
@@ -83,7 +101,7 @@ Import rule: `infra/` is the outermost ring — it may import any other ring. No
 
 ### Port pattern
 
-The credential port (`SecretSource` ABC, in `domain/credentials.py`) lets domain entities retrieve secrets without depending on the keyring library. The Infrastructure ring provides `KeyringSecretSource` as the production adapter; tests provide `FakeSecretSource`. The same pattern applies to future ports for container execution and session display (#59, #60).
+The `SecretSource` port (`domain/credentials.py`) lets domain entities retrieve credentials without a keyring dependency. `infra/keyring_source.py` provides the production adapter; tests provide `FakeSecretSource`. The same pattern will apply to future ports for container execution and session display (#59, #60).
 
 ### Module table
 
@@ -107,7 +125,7 @@ The later layers of the launcher — container/network execution and tmux sessio
 
 ---
 
-## 5. Configuration and project model
+## 6. Configuration and project model
 
 **Two entities.** `AppConfig` is the host-wide configuration; a `Project` is a domain model. The project's TOML file is parsed into a serialized file shape and then *resolved* into the fully-typed `Project` the rest of the launcher uses. Fields belong to the code, not to this document.
 
