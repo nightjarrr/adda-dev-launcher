@@ -15,7 +15,7 @@ from adda_dev.credentials import KeyringSecretStore, Secret, SecretError, Secret
 # ---------------------------------------------------------------------------
 
 
-class FakeSecretStore:
+class FakeSecretStore(SecretStore):
     """SecretStore test double backed by a dict."""
 
     def __init__(self, secrets: dict[tuple[str, str], str] | None = None) -> None:
@@ -26,20 +26,6 @@ class FakeSecretStore:
         if value is None:
             raise SecretError(f"No secret for {service!r}/{key!r}")
         return value
-
-
-# ---------------------------------------------------------------------------
-# SecretStore protocol conformance
-# ---------------------------------------------------------------------------
-
-
-def test_fake_secret_store_conforms_to_protocol() -> None:
-    store = FakeSecretStore()
-    assert isinstance(store, SecretStore)
-
-
-def test_keyring_secret_store_conforms_to_protocol() -> None:
-    assert isinstance(KeyringSecretStore(), SecretStore)
 
 
 # ---------------------------------------------------------------------------

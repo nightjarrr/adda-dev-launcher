@@ -3,7 +3,7 @@ SecretStore protocol, KeyringSecretStore implementation, and Secret ABC.
 """
 
 import abc
-from typing import ClassVar, Protocol, runtime_checkable
+from typing import ClassVar
 
 import keyring
 
@@ -14,16 +14,15 @@ class SecretError(AddaDevError):
     """Raised when no secret is found in the store."""
 
 
-@runtime_checkable
-class SecretStore(Protocol):
-    """Contract for secret retrieval backends."""
+class SecretStore(abc.ABC):
+    """Abstract base for secret retrieval backends."""
 
+    @abc.abstractmethod
     def get(self, service: str, key: str) -> str:
         """Return the secret for the given service and key, or raise SecretError."""
-        ...
 
 
-class KeyringSecretStore:
+class KeyringSecretStore(SecretStore):
     """SecretStore backed by the host OS keyring (via the keyring library)."""
 
     def get(self, service: str, key: str) -> str:
