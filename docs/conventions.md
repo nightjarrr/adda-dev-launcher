@@ -109,6 +109,7 @@ The CLI is built with Typer. Follow these rules when adding or modifying command
 `Output` is a `typing.Protocol` port defined in `common.py`. It exposes three methods: `info(message: str)`, `warning(message: str)`, and `error(exc: Exception)`. The production adapter is `RichOutput` in `infra/output.py`, which emits Rich-formatted terminal output.
 
 - **Receive `Output` as a parameter and call its methods** — `output.info(...)`, `output.warning(...)`, `output.error(...)`. Do not import or instantiate `RichOutput` from `app/` or `domain/`.
+- **Rich is an `infra/`-only library.** `RichOutput` wraps it; any other Rich-specific features (progress bars, tables, live displays) also belong in `infra/` adapters. `app/` and `domain/` must not import `rich` directly.
 - **In tests, use `FakeOutput` from `tests/conftest.py`** — it captures calls in `info_calls`, `warning_calls`, and `error_calls` lists for assertion.
 - **Do not use `print()`** in application code.
 

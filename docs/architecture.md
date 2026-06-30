@@ -37,7 +37,9 @@ The domain for this system is the *session launch*: a named project running in a
 
 **Domain port** — the domain defines one secondary port: `SecretSource`. Entities retrieve credentials through this interface without knowing whether the source is the OS keyring, a test double, or anything else. The domain owns the contract; infrastructure satisfies it.
 
-**Repository ports** — `ProjectRepository` (`domain/project.py`) and `BackendRepository` (`domain/llm.py`) are secondary ports for aggregate retrieval. Aggregates reference other aggregates by identity, not by direct object reference — `project.backend: LlmBackend` is the identity reference to the backend aggregate, not a nested object. Repositories are independent: they do not call each other; the application service composes aggregates from multiple repositories. This is the standard DDD cross-aggregate reference pattern.
+**Repository ports** — whenever the domain needs to retrieve an aggregate from persistent storage, a repository port is defined in `domain/` and implemented in `infra/`. The domain owns the contract (`get(identity) -> Aggregate`); infrastructure satisfies it. This keeps storage mechanics out of the domain and application rings entirely.
+
+Two rules govern the design. First, aggregates reference other aggregates by **identity value**, never by direct object embedding — a value-typed reference (an enum, a name string) acts as the foreign key. The aggregate on the other end is not nested; it is retrieved separately when needed. Second, repositories are **independent** — they do not call each other. The application service is the only place that composes aggregates from multiple repositories; it calls each repository in turn and assembles the result.
 
 ### Rings
 
