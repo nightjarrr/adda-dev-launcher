@@ -2,14 +2,15 @@
 adda-dev CLI entry point and composition root.
 """
 
-import rich
 import typer
 
 from ..app.run import run_session
+from ..domain.credentials import SecretError
 from ..domain.project import ProjectNotFoundError
 from .config import load_app_config
 from .keyring_source import KeyringSecretSource
 from .llm import resolve_backend
+from .output import RichOutput
 from .project import load_project
 from .store import SchemaValidationError, TomlParseError
 
@@ -28,13 +29,13 @@ def run(
 ) -> None:
     """Start the ADDA Dev Runtime for a configured project."""
     source = KeyringSecretSource()
+    output = RichOutput()
 
     try:
         config = load_app_config()
         project = load_project(project_name, config.project_defaults, source)
         backend = resolve_backend(project.backend, config.llm, source)
-    except (ProjectNotFoundError, SchemaValidationError, TomlParseError) as exc:
-        rich.print(f"[red]Error:[/red] {exc}")
+        run_session(project, backend, output)
+    except (ProjectNotFoundError, SchemaValidationError, TomlParseError, SecretError) as exc:
+        output.error(exc)
         raise typer.Exit(1)
-
-    run_session(project, backend)
