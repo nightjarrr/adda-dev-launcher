@@ -2,6 +2,7 @@
 LLM backend domain models: enum and credential-bearing frozen dataclasses.
 """
 
+import abc
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import ClassVar
@@ -41,3 +42,10 @@ class DeepSeekBackend(Secret):
     subagent_model: str
     effort_level: str
     source: SecretSource
+
+
+class BackendRepository(abc.ABC):
+    """Secondary port for retrieving backend aggregates by LlmBackend identity."""
+
+    @abc.abstractmethod
+    def get(self, backend: LlmBackend) -> AnthropicBackend | DeepSeekBackend: ...

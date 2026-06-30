@@ -8,9 +8,9 @@ from ..app.run import run_session
 from ..common import AddaDevError
 from .config import load_app_config
 from .keyring_source import KeyringSecretSource
-from .llm import resolve_backend
+from .llm import LlmConfigBackendRepository
 from .output import RichOutput
-from .project import load_project
+from .project import TomlProjectRepository
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -31,9 +31,9 @@ def run(
 
     try:
         config = load_app_config()
-        project = load_project(project_name, config.project_defaults, source)
-        backend = resolve_backend(project.backend, config.llm, source)
-        run_session(project, backend, output)
+        project_repo = TomlProjectRepository(config.project_defaults, source)
+        backend_repo = LlmConfigBackendRepository(config.llm, source)
+        run_session(project_name, project_repo, backend_repo, output)
     except AddaDevError as exc:
         output.error(exc)
         raise typer.Exit(1)

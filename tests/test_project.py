@@ -1,5 +1,5 @@
 """
-Tests for infra/project.py: ProjectFileModel validation, load_project() paths.
+Tests for infra/project.py: ProjectFileModel validation, TomlProjectRepository paths.
 """
 
 from pathlib import Path
@@ -10,7 +10,7 @@ from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import LlmBackend
 from adda_dev.domain.project import ProjectNotFoundError
 from adda_dev.infra.config import ProjectDefaults
-from adda_dev.infra.project import PROJECTS_DIR_NAME, ProjectFileModel, load_project
+from adda_dev.infra.project import PROJECTS_DIR_NAME, ProjectFileModel, TomlProjectRepository
 from adda_dev.infra.store import InvalidFileNameError, SchemaValidationError, TomlParseError
 from tests.conftest import FakeSecretSource
 
@@ -23,6 +23,10 @@ _DEFAULTS = ProjectDefaults()
 _CUSTOM_DEFAULTS = ProjectDefaults.model_validate({"tmpfs": {"home": "1g", "workspace": "512m", "tmp": "128m"}})
 
 _FAKE = FakeSecretSource()
+
+
+def _repo(defaults: ProjectDefaults = _DEFAULTS, config_dir: Path | None = None) -> TomlProjectRepository:
+    return TomlProjectRepository(defaults, _FAKE, config_dir=config_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -90,89 +94,89 @@ def test_project_file_model_invalid_backend_rejected() -> None:
 
 
 # ---------------------------------------------------------------------------
-# load_project — tmpfs resolution: no override → defaults pass through
+# TomlProjectRepository.get — tmpfs resolution: no override → defaults pass through
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_no_tmpfs_override_uses_defaults(tmp_path: Path) -> None:
+def test_toml_project_repository_no_tmpfs_override_uses_defaults(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     (tmp_path / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
-    proj = load_project("demo", _CUSTOM_DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(_CUSTOM_DEFAULTS, config_dir=tmp_path).get("demo")
     assert proj.tmpfs.home == "1g"
     assert proj.tmpfs.workspace == "512m"
     assert proj.tmpfs.tmp == "128m"
 
 
-def test_load_project_no_tmpfs_override_uses_builtin_defaults(tmp_path: Path) -> None:
+def test_toml_project_repository_no_tmpfs_override_uses_builtin_defaults(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     (tmp_path / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
-    proj = load_project("demo", _DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(config_dir=tmp_path).get("demo")
     assert proj.tmpfs.home == "512m"
     assert proj.tmpfs.workspace == "256m"
     assert proj.tmpfs.tmp == "256m"
 
 
 # ---------------------------------------------------------------------------
-# load_project — full tmpfs override
+# TomlProjectRepository.get — full tmpfs override
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_full_tmpfs_override(tmp_path: Path) -> None:
+def test_toml_project_repository_full_tmpfs_override(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     (tmp_path / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
         '[tmpfs]\nhome = "2g"\nworkspace = "1g"\ntmp = "512m"\n'
     )
-    proj = load_project("demo", _DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(config_dir=tmp_path).get("demo")
     assert proj.tmpfs.home == "2g"
     assert proj.tmpfs.workspace == "1g"
     assert proj.tmpfs.tmp == "512m"
 
 
 # ---------------------------------------------------------------------------
-# load_project — partial tmpfs override (field-wise merge)
+# TomlProjectRepository.get — partial tmpfs override (field-wise merge)
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_partial_tmpfs_override_workspace_only(tmp_path: Path) -> None:
+def test_toml_project_repository_partial_tmpfs_override_workspace_only(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     (tmp_path / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
         '[tmpfs]\nworkspace = "2g"\n'
     )
-    proj = load_project("demo", _CUSTOM_DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(_CUSTOM_DEFAULTS, config_dir=tmp_path).get("demo")
     assert proj.tmpfs.workspace == "2g"
     assert proj.tmpfs.home == "1g"
     assert proj.tmpfs.tmp == "128m"
 
 
-def test_load_project_partial_tmpfs_override_home_only(tmp_path: Path) -> None:
+def test_toml_project_repository_partial_tmpfs_override_home_only(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     (tmp_path / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n[tmpfs]\nhome = "4g"\n'
     )
-    proj = load_project("demo", _DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(config_dir=tmp_path).get("demo")
     assert proj.tmpfs.home == "4g"
     assert proj.tmpfs.workspace == "256m"
     assert proj.tmpfs.tmp == "256m"
 
 
 # ---------------------------------------------------------------------------
-# load_project — github and identity fields pass through
+# TomlProjectRepository.get — github and identity fields pass through
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_github_fields(tmp_path: Path) -> None:
+def test_toml_project_repository_github_fields(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     (tmp_path / "projects" / "myproj.toml").write_text(
         'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\nbackend = "deepseek"\n'
         '[github]\nowner = "nightjarrr"\nrepo = "adda-dev-launcher"\nsecret_name = "demo-token"\n'
     )
-    proj = load_project("myproj", _DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(config_dir=tmp_path).get("myproj")
     assert proj.name == "myproj"
     assert proj.github.owner == "nightjarrr"
     assert proj.github.repo == "adda-dev-launcher"
@@ -181,21 +185,21 @@ def test_load_project_github_fields(tmp_path: Path) -> None:
     assert proj.backend == LlmBackend.deepseek
 
 
-def test_load_project_constructs_github_domain_model(tmp_path: Path) -> None:
+def test_toml_project_repository_constructs_github_domain_model(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     (tmp_path / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
-    proj = load_project("demo", _DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(config_dir=tmp_path).get("demo")
     assert isinstance(proj.github, GitHub)
 
 
 # ---------------------------------------------------------------------------
-# load_project — valid project file
+# TomlProjectRepository.get — valid project file
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_valid(tmp_path: Path) -> None:
+def test_toml_project_repository_valid(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     proj_file = tmp_path / "projects" / "demo.toml"
     proj_file.write_text(
@@ -206,14 +210,14 @@ def test_load_project_valid(tmp_path: Path) -> None:
         'repo = "adda-dev-launcher"\n'
         'secret_name = "demo-token"\n'
     )
-    proj = load_project("demo", _DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(config_dir=tmp_path).get("demo")
     assert proj.name == "demo"
     assert proj.backend == LlmBackend.anthropic
     assert proj.tmpfs.home == "512m"
 
 
-def test_load_project_from_static_fixture() -> None:
-    proj = load_project("demo", _DEFAULTS, _FAKE, config_dir=DATA_DIR)
+def test_toml_project_repository_from_static_fixture() -> None:
+    proj = _repo(config_dir=DATA_DIR).get("demo")
     assert proj.name == "demo"
     assert proj.backend == LlmBackend.deepseek
     assert proj.tmpfs.workspace == "2g"
@@ -226,91 +230,91 @@ def test_load_project_from_static_fixture() -> None:
 
 
 # ---------------------------------------------------------------------------
-# load_project — builds correct path (entity owns <name>.toml naming)
+# TomlProjectRepository.get — builds correct path
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_builds_correct_path(tmp_path: Path) -> None:
+def test_toml_project_repository_builds_correct_path(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     proj_file = tmp_path / "projects" / "myproj.toml"
     proj_file.write_text(
         'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
-    proj = load_project("myproj", _DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(config_dir=tmp_path).get("myproj")
     assert proj.name == "myproj"
 
 
-def test_load_project_uses_projects_dir_name_constant(tmp_path: Path) -> None:
-    # load_project owns path construction: file must live at <config_dir>/PROJECTS_DIR_NAME/<name>.toml.
+def test_toml_project_repository_uses_projects_dir_name_constant(tmp_path: Path) -> None:
+    # get() owns path construction: file must live at <config_dir>/PROJECTS_DIR_NAME/<name>.toml.
     projects_subdir = tmp_path / PROJECTS_DIR_NAME
     projects_subdir.mkdir()
     (projects_subdir / "alpha.toml").write_text(
         'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
-    proj = load_project("alpha", _DEFAULTS, _FAKE, config_dir=tmp_path)
+    proj = _repo(config_dir=tmp_path).get("alpha")
     assert proj.name == "alpha"
     # A file placed outside PROJECTS_DIR_NAME is not found.
     (tmp_path / "alpha.toml").write_text(
         'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
     with pytest.raises(ProjectNotFoundError):
-        load_project("alpha", _DEFAULTS, _FAKE, config_dir=projects_subdir)
+        _repo(config_dir=projects_subdir).get("alpha")
 
 
 # ---------------------------------------------------------------------------
-# load_project — missing file → ProjectNotFoundError
+# TomlProjectRepository.get — missing file → ProjectNotFoundError
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_missing_file_raises_project_not_found_error(tmp_path: Path) -> None:
+def test_toml_project_repository_missing_file_raises_project_not_found_error(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     with pytest.raises(ProjectNotFoundError):
-        load_project("missing", _DEFAULTS, _FAKE, config_dir=tmp_path)
+        _repo(config_dir=tmp_path).get("missing")
 
 
 # ---------------------------------------------------------------------------
-# load_project — invalid project name → InvalidFileNameError
+# TomlProjectRepository.get — invalid project name → InvalidFileNameError
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_path_traversal_raises_invalid_file_name_error(tmp_path: Path) -> None:
+def test_toml_project_repository_path_traversal_raises_invalid_file_name_error(tmp_path: Path) -> None:
     with pytest.raises(InvalidFileNameError):
-        load_project("../escape", _DEFAULTS, _FAKE, config_dir=tmp_path)
+        _repo(config_dir=tmp_path).get("../escape")
 
 
-def test_load_project_separator_in_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+def test_toml_project_repository_separator_in_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
     with pytest.raises(InvalidFileNameError):
-        load_project("a/b", _DEFAULTS, _FAKE, config_dir=tmp_path)
+        _repo(config_dir=tmp_path).get("a/b")
 
 
-def test_load_project_empty_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+def test_toml_project_repository_empty_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
     with pytest.raises(InvalidFileNameError):
-        load_project("", _DEFAULTS, _FAKE, config_dir=tmp_path)
+        _repo(config_dir=tmp_path).get("")
 
 
-def test_load_project_dotted_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+def test_toml_project_repository_dotted_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
     with pytest.raises(InvalidFileNameError):
-        load_project("a.b", _DEFAULTS, _FAKE, config_dir=tmp_path)
+        _repo(config_dir=tmp_path).get("a.b")
 
 
 # ---------------------------------------------------------------------------
-# load_project — TOML parse error
+# TomlProjectRepository.get — TOML parse error
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_parse_error_raises_toml_parse_error(tmp_path: Path) -> None:
+def test_toml_project_repository_parse_error_raises_toml_parse_error(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     (tmp_path / "projects" / "bad.toml").write_text("owner = [unclosed\n")
     with pytest.raises(TomlParseError):
-        load_project("bad", _DEFAULTS, _FAKE, config_dir=tmp_path)
+        _repo(config_dir=tmp_path).get("bad")
 
 
 # ---------------------------------------------------------------------------
-# load_project — schema validation error (unknown key)
+# TomlProjectRepository.get — schema validation error (unknown key)
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_unknown_key_raises_schema_validation_error(tmp_path: Path) -> None:
+def test_toml_project_repository_unknown_key_raises_schema_validation_error(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     proj_file = tmp_path / "projects" / "extra.toml"
     proj_file.write_text(
@@ -323,15 +327,15 @@ def test_load_project_unknown_key_raises_schema_validation_error(tmp_path: Path)
         'secret_name = "demo-token"\n'
     )
     with pytest.raises(SchemaValidationError):
-        load_project("extra", _DEFAULTS, _FAKE, config_dir=tmp_path)
+        _repo(config_dir=tmp_path).get("extra")
 
 
 # ---------------------------------------------------------------------------
-# load_project — schema validation error (missing required field)
+# TomlProjectRepository.get — schema validation error (missing required field)
 # ---------------------------------------------------------------------------
 
 
-def test_load_project_missing_backend_raises_schema_validation_error(tmp_path: Path) -> None:
+def test_toml_project_repository_missing_backend_raises_schema_validation_error(tmp_path: Path) -> None:
     (tmp_path / "projects").mkdir()
     proj_file = tmp_path / "projects" / "nobk.toml"
     proj_file.write_text(
@@ -342,15 +346,15 @@ def test_load_project_missing_backend_raises_schema_validation_error(tmp_path: P
         'secret_name = "demo-token"\n'
     )
     with pytest.raises(SchemaValidationError):
-        load_project("nobk", _DEFAULTS, _FAKE, config_dir=tmp_path)
+        _repo(config_dir=tmp_path).get("nobk")
 
 
 # ---------------------------------------------------------------------------
-# Integration: AppConfig + load_project (resolution chain)
+# Integration: AppConfig + TomlProjectRepository (resolution chain)
 # ---------------------------------------------------------------------------
 
 
-def test_integration_app_config_and_load_project(tmp_path: Path) -> None:
+def test_integration_app_config_and_toml_project_repository(tmp_path: Path) -> None:
     # Write a config.toml with non-default project_defaults
     cfg_file = tmp_path / "config.toml"
     cfg_file.write_text('[project_defaults.tmpfs]\nhome = "2g"\n')
@@ -371,8 +375,8 @@ def test_integration_app_config_and_load_project(tmp_path: Path) -> None:
 
     from adda_dev.infra.config import load_app_config
 
-    app = load_app_config(config_dir=tmp_path)
-    proj = load_project("myproj", app.project_defaults, _FAKE, config_dir=tmp_path)
+    app_config = load_app_config(config_dir=tmp_path)
+    proj = TomlProjectRepository(app_config.project_defaults, _FAKE, config_dir=tmp_path).get("myproj")
 
     # workspace overridden by project; home from app config; tmp from built-in default
     assert proj.tmpfs.workspace == "4g"

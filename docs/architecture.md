@@ -37,6 +37,10 @@ The domain for this system is the *session launch*: a named project running in a
 
 **Domain port** — the domain defines one secondary port: `SecretSource`. Entities retrieve credentials through this interface without knowing whether the source is the OS keyring, a test double, or anything else. The domain owns the contract; infrastructure satisfies it.
 
+**Repository ports** — whenever the domain needs to retrieve an aggregate from persistent storage, a repository port is defined in `domain/` and implemented in `infra/`. The domain owns the contract (`get(identity) -> Aggregate`); infrastructure satisfies it. This keeps storage mechanics out of the domain and application rings entirely.
+
+Two rules govern the design. First, aggregates reference other aggregates by **identity value**, never by direct object embedding — a value-typed reference (an enum, a name string) acts as the foreign key. The aggregate on the other end is not nested; it is retrieved separately when needed. Second, repositories are **independent** — they do not call each other. The application service is the only place that composes aggregates from multiple repositories; it calls each repository in turn and assembles the result.
+
 ### Rings
 
 **Shared kernel** (`common.py`) — cross-cutting foundations importable by any ring: the root exception type and the strict-model Pydantic base.
@@ -101,7 +105,13 @@ Source lives under `src/adda_dev/`. The ring structure defined in §2 maps direc
 
 ### Port pattern
 
-The `SecretSource` port (`domain/credentials.py`) lets domain entities retrieve credentials without a keyring dependency. `infra/keyring_source.py` provides the production adapter; tests provide `FakeSecretSource`. The same pattern will apply to future ports for container execution and session display (#59, #60).
+Ports are defined in the domain or shared kernel; infrastructure provides the production adapters. Three port families are active:
+
+- **Credential retrieval:** `SecretSource` (`domain/credentials.py`) → `KeyringSecretSource` (`infra/keyring_source.py`)
+- **Aggregate retrieval:** `ProjectRepository` (`domain/project.py`) → `TomlProjectRepository` (`infra/project.py`); `BackendRepository` (`domain/llm.py`) → `LlmConfigBackendRepository` (`infra/llm.py`)
+- **Output delivery:** `Output` Protocol (`common.py`) → `RichOutput` (`infra/output.py`)
+
+The same pattern will apply to future ports for container execution and session display (#59, #60).
 
 ### Module table
 
@@ -111,14 +121,15 @@ The `SecretSource` port (`domain/credentials.py`) lets domain entities retrieve 
 | `domain/tmpfs` | Domain | tmpfs sizing value objects and their override merge |
 | `domain/credentials` | Domain | `SecretSource` port, `Secret` ABC, `SecretError` |
 | `domain/github` | Domain | `GitHub` domain model (credential retrieval via `SecretSource`) |
-| `domain/llm` | Domain | `LlmBackend` enum, `AnthropicBackend`, `DeepSeekBackend` frozen dataclasses |
-| `domain/project` | Domain | `Project` domain entity and `ProjectNotFoundError` |
-| `app/run` | Application | `run_session()` use case: retrieve credentials and display session info |
+| `domain/llm` | Domain | `LlmBackend` enum, `AnthropicBackend`, `DeepSeekBackend` frozen dataclasses, `BackendRepository` port |
+| `domain/project` | Domain | `Project` domain entity, `ProjectNotFoundError`, `ProjectRepository` port |
+| `app/run` | Application | `run_session()` use case: composes project and backend aggregates, retrieves credentials, displays session info |
 | `infra/store` | Infrastructure | Config-directory resolution, safe file-name validation, TOML load+validate |
 | `infra/keyring_source` | Infrastructure | `KeyringSecretSource` — OS keyring adapter for the `SecretSource` port |
-| `infra/llm` | Infrastructure | LLM config DTOs (`AnthropicConfigModel`, `DeepSeekConfigModel`, `LlmConfig`) and `resolve_backend()` |
+| `infra/llm` | Infrastructure | LLM config DTOs (`AnthropicConfigModel`, `DeepSeekConfigModel`, `LlmConfig`) and `LlmConfigBackendRepository` |
 | `infra/config` | Infrastructure | Host config DTOs (`AppConfig`, `ProjectDefaults`, `ContainerEngine`) and `load_app_config()` |
-| `infra/project` | Infrastructure | Project file DTOs (`ProjectFileModel`, `GitHubFileModel`) and `load_project()` |
+| `infra/project` | Infrastructure | Project file DTOs (`ProjectFileModel`, `GitHubFileModel`) and `TomlProjectRepository` |
+| `infra/output` | Infrastructure | `RichOutput` — Rich terminal adapter for the `Output` port |
 | `infra/cli` | Infrastructure | Typer entry point and composition root |
 
 The later layers of the launcher — container/network execution and tmux session management — extend this graph as they are built.
