@@ -62,7 +62,7 @@ New work is measured against these.
 
 **Open for extension, closed for modification.** New behaviour is added through defined extension points rather than by editing existing code. The LLM backend model is the worked example: a new vendor is a new backend-config subclass plus an enum value and a registry entry — existing backends and the load path are untouched.
 
-**Explicit dependencies, no global state.** Components receive what they need as arguments rather than reaching for ambient state: load entry points take an injectable config directory, and a project is resolved against the project-defaults it is handed, not a global config object. There are no module-level singletons or shared mutable configuration. The composition root (`infra/cli.py`) is the single place that assembles and wires everything together.
+**Explicit dependencies, no global state.** Components receive what they need as arguments rather than reaching for ambient state: a project is resolved against the project-defaults it is handed, not a global config object. Storage roots are resolved from XDG env vars at call time rather than injected as path parameters. There are no module-level singletons or shared mutable configuration. The composition root (`infra/cli.py`) is the single place that assembles and wires everything together.
 
 **Configuration is data; a project is a domain entity.** `AppConfig` is a passive host-configuration value object. `Project` is a domain entity whose TOML file is its serialized state; it is not configuration. The two are never fused into a combined "effective config" — resolving a project against host defaults is the project's own behaviour.
 
