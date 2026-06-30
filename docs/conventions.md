@@ -123,7 +123,7 @@ uv run ruff check src/ tests/     # lint
 uv run mypy src/                  # type-check
 uv run adda-dev                   # invoke the CLI
 uv build                          # build wheel
-quality-gates                     # run all local quality gates
+/usr/local/libexec/adda-dev-runtime/bin/quality-gates  # run all local quality gates
 ```
 
 Provision dependencies with `uv sync --frozen` — installs the pinned set from `uv.lock`. Run when `uv.lock` changes. Add new dependencies with `uv add` (runtime) or `uv add --group dev` (dev).
