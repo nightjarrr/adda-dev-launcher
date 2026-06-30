@@ -5,7 +5,6 @@ Session infrastructure: filesystem-backed session repository.
 import shutil
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 
 from ..common import StrictModel
 from ..domain.session import Session, SessionRepository
@@ -24,8 +23,8 @@ class SessionFileModel(StrictModel):
 class FsSessionRepository(SessionRepository):
     """SessionRepository adapter that stores session state in the XDG runtime directory."""
 
-    def __init__(self, runtime_base: Path | None = None) -> None:
-        self._runtime_base = runtime_base or resolve_storage_root(StorageArea.runtime)
+    def __init__(self) -> None:
+        self._runtime_base = resolve_storage_root(StorageArea.runtime)
 
     def create(self, project_name: str, issue_id: int | None = None) -> Session:
         session_id = f"session-{uuid.uuid4()}"

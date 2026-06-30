@@ -14,7 +14,7 @@ from adda_dev.infra.project import PROJECTS_DIR_NAME, ProjectFileModel, TomlProj
 from adda_dev.infra.store import InvalidFileNameError, SchemaValidationError, TomlParseError
 from tests.conftest import FakeSecretSource
 
-DATA_DIR = Path(__file__).parent / "data" / "config"
+DATA_DIR = Path(__file__).parent / "data"
 
 # Shared defaults using built-in values.
 _DEFAULTS = ProjectDefaults()
@@ -25,8 +25,8 @@ _CUSTOM_DEFAULTS = ProjectDefaults.model_validate({"tmpfs": {"home": "1g", "work
 _FAKE = FakeSecretSource()
 
 
-def _repo(defaults: ProjectDefaults = _DEFAULTS, config_dir: Path | None = None) -> TomlProjectRepository:
-    return TomlProjectRepository(defaults, _FAKE, config_dir=config_dir)
+def _repo(defaults: ProjectDefaults = _DEFAULTS) -> TomlProjectRepository:
+    return TomlProjectRepository(defaults, _FAKE)
 
 
 # ---------------------------------------------------------------------------
@@ -98,23 +98,31 @@ def test_project_file_model_invalid_backend_rejected() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_no_tmpfs_override_uses_defaults(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "demo.toml").write_text(
+def test_toml_project_repository_no_tmpfs_override_uses_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    (config_root / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
-    proj = _repo(_CUSTOM_DEFAULTS, config_dir=tmp_path).get("demo")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo(_CUSTOM_DEFAULTS).get("demo")
     assert proj.tmpfs.home == "1g"
     assert proj.tmpfs.workspace == "512m"
     assert proj.tmpfs.tmp == "128m"
 
 
-def test_toml_project_repository_no_tmpfs_override_uses_builtin_defaults(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "demo.toml").write_text(
+def test_toml_project_repository_no_tmpfs_override_uses_builtin_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    (config_root / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
-    proj = _repo(config_dir=tmp_path).get("demo")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo().get("demo")
     assert proj.tmpfs.home == "512m"
     assert proj.tmpfs.workspace == "256m"
     assert proj.tmpfs.tmp == "256m"
@@ -125,13 +133,16 @@ def test_toml_project_repository_no_tmpfs_override_uses_builtin_defaults(tmp_pat
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_full_tmpfs_override(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "demo.toml").write_text(
+def test_toml_project_repository_full_tmpfs_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    (config_root / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
         '[tmpfs]\nhome = "2g"\nworkspace = "1g"\ntmp = "512m"\n'
     )
-    proj = _repo(config_dir=tmp_path).get("demo")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo().get("demo")
     assert proj.tmpfs.home == "2g"
     assert proj.tmpfs.workspace == "1g"
     assert proj.tmpfs.tmp == "512m"
@@ -142,24 +153,30 @@ def test_toml_project_repository_full_tmpfs_override(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_partial_tmpfs_override_workspace_only(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "demo.toml").write_text(
+def test_toml_project_repository_partial_tmpfs_override_workspace_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    (config_root / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
         '[tmpfs]\nworkspace = "2g"\n'
     )
-    proj = _repo(_CUSTOM_DEFAULTS, config_dir=tmp_path).get("demo")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo(_CUSTOM_DEFAULTS).get("demo")
     assert proj.tmpfs.workspace == "2g"
     assert proj.tmpfs.home == "1g"
     assert proj.tmpfs.tmp == "128m"
 
 
-def test_toml_project_repository_partial_tmpfs_override_home_only(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "demo.toml").write_text(
+def test_toml_project_repository_partial_tmpfs_override_home_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    (config_root / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n[tmpfs]\nhome = "4g"\n'
     )
-    proj = _repo(config_dir=tmp_path).get("demo")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo().get("demo")
     assert proj.tmpfs.home == "4g"
     assert proj.tmpfs.workspace == "256m"
     assert proj.tmpfs.tmp == "256m"
@@ -170,13 +187,16 @@ def test_toml_project_repository_partial_tmpfs_override_home_only(tmp_path: Path
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_github_fields(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "myproj.toml").write_text(
+def test_toml_project_repository_github_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    (config_root / "projects" / "myproj.toml").write_text(
         'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\nbackend = "deepseek"\n'
         '[github]\nowner = "nightjarrr"\nrepo = "adda-dev-launcher"\nsecret_name = "demo-token"\n'
     )
-    proj = _repo(config_dir=tmp_path).get("myproj")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo().get("myproj")
     assert proj.name == "myproj"
     assert proj.github.owner == "nightjarrr"
     assert proj.github.repo == "adda-dev-launcher"
@@ -185,12 +205,15 @@ def test_toml_project_repository_github_fields(tmp_path: Path) -> None:
     assert proj.backend == LlmBackend.deepseek
 
 
-def test_toml_project_repository_constructs_github_domain_model(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "demo.toml").write_text(
+def test_toml_project_repository_constructs_github_domain_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    (config_root / "projects" / "demo.toml").write_text(
         'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
-    proj = _repo(config_dir=tmp_path).get("demo")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo().get("demo")
     assert isinstance(proj.github, GitHub)
 
 
@@ -199,9 +222,11 @@ def test_toml_project_repository_constructs_github_domain_model(tmp_path: Path) 
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_valid(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    proj_file = tmp_path / "projects" / "demo.toml"
+def test_toml_project_repository_valid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    proj_file = config_root / "projects" / "demo.toml"
     proj_file.write_text(
         'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
         'backend = "anthropic"\n'
@@ -210,14 +235,16 @@ def test_toml_project_repository_valid(tmp_path: Path) -> None:
         'repo = "adda-dev-launcher"\n'
         'secret_name = "demo-token"\n'
     )
-    proj = _repo(config_dir=tmp_path).get("demo")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo().get("demo")
     assert proj.name == "demo"
     assert proj.backend == LlmBackend.anthropic
     assert proj.tmpfs.home == "512m"
 
 
-def test_toml_project_repository_from_static_fixture() -> None:
-    proj = _repo(config_dir=DATA_DIR).get("demo")
+def test_toml_project_repository_from_static_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(DATA_DIR))
+    proj = _repo().get("demo")
     assert proj.name == "demo"
     assert proj.backend == LlmBackend.deepseek
     assert proj.tmpfs.workspace == "2g"
@@ -234,31 +261,41 @@ def test_toml_project_repository_from_static_fixture() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_builds_correct_path(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    proj_file = tmp_path / "projects" / "myproj.toml"
+def test_toml_project_repository_builds_correct_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    proj_file = config_root / "projects" / "myproj.toml"
     proj_file.write_text(
         'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
-    proj = _repo(config_dir=tmp_path).get("myproj")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo().get("myproj")
     assert proj.name == "myproj"
 
 
-def test_toml_project_repository_uses_projects_dir_name_constant(tmp_path: Path) -> None:
-    # get() owns path construction: file must live at <config_dir>/PROJECTS_DIR_NAME/<name>.toml.
-    projects_subdir = tmp_path / PROJECTS_DIR_NAME
+def test_toml_project_repository_uses_projects_dir_name_constant(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # get() owns path construction: file must live at <config_root>/PROJECTS_DIR_NAME/<name>.toml.
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    projects_subdir = config_root / PROJECTS_DIR_NAME
     projects_subdir.mkdir()
     (projects_subdir / "alpha.toml").write_text(
         'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
-    proj = _repo(config_dir=tmp_path).get("alpha")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = _repo().get("alpha")
     assert proj.name == "alpha"
-    # A file placed outside PROJECTS_DIR_NAME is not found.
-    (tmp_path / "alpha.toml").write_text(
+    # A file placed directly under config_root (not in projects/) is not found.
+    (config_root / "alpha.toml").write_text(
         'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
     with pytest.raises(ProjectNotFoundError):
-        _repo(config_dir=projects_subdir).get("alpha")
+        # Remove the projects/ subdir so the correctly-named file in the wrong place is not found.
+        import shutil
+
+        shutil.rmtree(projects_subdir)
+        _repo().get("alpha")
 
 
 # ---------------------------------------------------------------------------
@@ -266,10 +303,15 @@ def test_toml_project_repository_uses_projects_dir_name_constant(tmp_path: Path)
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_missing_file_raises_project_not_found_error(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
+def test_toml_project_repository_missing_file_raises_project_not_found_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(ProjectNotFoundError):
-        _repo(config_dir=tmp_path).get("missing")
+        _repo().get("missing")
 
 
 # ---------------------------------------------------------------------------
@@ -277,24 +319,36 @@ def test_toml_project_repository_missing_file_raises_project_not_found_error(tmp
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_path_traversal_raises_invalid_file_name_error(tmp_path: Path) -> None:
+def test_toml_project_repository_path_traversal_raises_invalid_file_name_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(InvalidFileNameError):
-        _repo(config_dir=tmp_path).get("../escape")
+        _repo().get("../escape")
 
 
-def test_toml_project_repository_separator_in_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+def test_toml_project_repository_separator_in_name_raises_invalid_file_name_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(InvalidFileNameError):
-        _repo(config_dir=tmp_path).get("a/b")
+        _repo().get("a/b")
 
 
-def test_toml_project_repository_empty_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+def test_toml_project_repository_empty_name_raises_invalid_file_name_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(InvalidFileNameError):
-        _repo(config_dir=tmp_path).get("")
+        _repo().get("")
 
 
-def test_toml_project_repository_dotted_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+def test_toml_project_repository_dotted_name_raises_invalid_file_name_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(InvalidFileNameError):
-        _repo(config_dir=tmp_path).get("a.b")
+        _repo().get("a.b")
 
 
 # ---------------------------------------------------------------------------
@@ -302,11 +356,14 @@ def test_toml_project_repository_dotted_name_raises_invalid_file_name_error(tmp_
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_parse_error_raises_toml_parse_error(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "bad.toml").write_text("owner = [unclosed\n")
+def test_toml_project_repository_parse_error_raises_toml_parse_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    (config_root / "projects" / "bad.toml").write_text("owner = [unclosed\n")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(TomlParseError):
-        _repo(config_dir=tmp_path).get("bad")
+        _repo().get("bad")
 
 
 # ---------------------------------------------------------------------------
@@ -314,9 +371,13 @@ def test_toml_project_repository_parse_error_raises_toml_parse_error(tmp_path: P
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_unknown_key_raises_schema_validation_error(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    proj_file = tmp_path / "projects" / "extra.toml"
+def test_toml_project_repository_unknown_key_raises_schema_validation_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    proj_file = config_root / "projects" / "extra.toml"
     proj_file.write_text(
         'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
         'backend = "anthropic"\n'
@@ -326,8 +387,9 @@ def test_toml_project_repository_unknown_key_raises_schema_validation_error(tmp_
         'repo = "adda-dev-launcher"\n'
         'secret_name = "demo-token"\n'
     )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(SchemaValidationError):
-        _repo(config_dir=tmp_path).get("extra")
+        _repo().get("extra")
 
 
 # ---------------------------------------------------------------------------
@@ -335,9 +397,13 @@ def test_toml_project_repository_unknown_key_raises_schema_validation_error(tmp_
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_missing_backend_raises_schema_validation_error(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
-    proj_file = tmp_path / "projects" / "nobk.toml"
+def test_toml_project_repository_missing_backend_raises_schema_validation_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    proj_file = config_root / "projects" / "nobk.toml"
     proj_file.write_text(
         'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
         "[github]\n"
@@ -345,8 +411,9 @@ def test_toml_project_repository_missing_backend_raises_schema_validation_error(
         'repo = "adda-dev-launcher"\n'
         'secret_name = "demo-token"\n'
     )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(SchemaValidationError):
-        _repo(config_dir=tmp_path).get("nobk")
+        _repo().get("nobk")
 
 
 # ---------------------------------------------------------------------------
@@ -354,14 +421,17 @@ def test_toml_project_repository_missing_backend_raises_schema_validation_error(
 # ---------------------------------------------------------------------------
 
 
-def test_integration_app_config_and_toml_project_repository(tmp_path: Path) -> None:
+def test_integration_app_config_and_toml_project_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+
     # Write a config.toml with non-default project_defaults
-    cfg_file = tmp_path / "config.toml"
+    cfg_file = config_root / "config.toml"
     cfg_file.write_text('[project_defaults.tmpfs]\nhome = "2g"\n')
 
     # Write a project with a partial tmpfs override
-    (tmp_path / "projects").mkdir()
-    proj_file = tmp_path / "projects" / "myproj.toml"
+    (config_root / "projects").mkdir()
+    proj_file = config_root / "projects" / "myproj.toml"
     proj_file.write_text(
         'image = "ghcr.io/acme/my-repo:v1.0.0"\n'
         'backend = "anthropic"\n'
@@ -373,10 +443,12 @@ def test_integration_app_config_and_toml_project_repository(tmp_path: Path) -> N
         'workspace = "4g"\n'
     )
 
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
     from adda_dev.infra.config import load_app_config
 
-    app_config = load_app_config(config_dir=tmp_path)
-    proj = TomlProjectRepository(app_config.project_defaults, _FAKE, config_dir=tmp_path).get("myproj")
+    app_config = load_app_config()
+    proj = TomlProjectRepository(app_config.project_defaults, _FAKE).get("myproj")
 
     # workspace overridden by project; home from app config; tmp from built-in default
     assert proj.tmpfs.workspace == "4g"

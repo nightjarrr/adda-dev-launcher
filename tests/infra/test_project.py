@@ -37,13 +37,16 @@ def test_build_github_creates_github_domain_model() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_threads_source_to_github(tmp_path: Path) -> None:
+def test_toml_project_repository_threads_source_to_github(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeSecretSource()
-    (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "proj.toml").write_text(
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    (config_root / "projects" / "proj.toml").write_text(
         'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
-    proj = TomlProjectRepository(_DEFAULTS, fake, config_dir=tmp_path).get("proj")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    proj = TomlProjectRepository(_DEFAULTS, fake).get("proj")
     assert proj.github.source is fake
 
 
@@ -52,10 +55,15 @@ def test_toml_project_repository_threads_source_to_github(tmp_path: Path) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_missing_raises_project_not_found_error(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
+def test_toml_project_repository_missing_raises_project_not_found_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "projects").mkdir()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(ProjectNotFoundError, match="nonexistent"):
-        TomlProjectRepository(_DEFAULTS, _FAKE, config_dir=tmp_path).get("nonexistent")
+        TomlProjectRepository(_DEFAULTS, _FAKE).get("nonexistent")
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +71,9 @@ def test_toml_project_repository_missing_raises_project_not_found_error(tmp_path
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_bad_name_raises_invalid_file_name_error(tmp_path: Path) -> None:
+def test_toml_project_repository_bad_name_raises_invalid_file_name_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     with pytest.raises(InvalidFileNameError):
-        TomlProjectRepository(_DEFAULTS, _FAKE, config_dir=tmp_path).get("bad.name")
+        TomlProjectRepository(_DEFAULTS, _FAKE).get("bad.name")

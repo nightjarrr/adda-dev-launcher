@@ -40,10 +40,9 @@ class AppConfig(StrictModel):
     project_defaults: ProjectDefaults = ProjectDefaults()
 
 
-def load_app_config(config_dir: Path | None = None) -> AppConfig:
+def load_app_config() -> AppConfig:
     """Load AppConfig from config.toml; return defaults if the file is absent."""
-    cd = config_dir if config_dir is not None else resolve_storage_root(StorageArea.config)
-    path = cd / CONFIG_FILE_NAME
+    path = resolve_storage_root(StorageArea.config) / CONFIG_FILE_NAME
     if not path.exists():
         return AppConfig()
     return load_toml(path, AppConfig)
