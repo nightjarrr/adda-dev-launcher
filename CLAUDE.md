@@ -45,7 +45,7 @@ docs/conventions.md      # coding conventions for this repo
 - **Type checking:** mypy (strict). Run: `uv run mypy src/`.
 - **Build:** `uv build` produces a wheel in `dist/`.
 - **Pre-commit hooks:** managed by `pre-commit` (installed via `uv run pre-commit install`). Installed automatically by `.adda-init.sh`.
-- **Local quality gate:** shell-syntax + python-lint + python-format + python-types + python-tests, via `.quality-gates.toml`. Run with `quality-gates`.
+- **Local quality gate:** shell-syntax + python-lint + python-format + python-types + python-tests, via `.quality-gates.toml`. Run with `/usr/local/libexec/adda-dev-runtime/bin/quality-gates`.
 - **CI quality gates:** `shellcheck` (lint), `gitleaks` (secret scan), and Python checks (ruff, mypy, pytest) — shell and secret gates run in CI only and are not available in the dev container.
 - **Coverage:** pytest-cov; branch coverage configured in `pyproject.toml`. Reports: terminal (missing lines) + XML for CI.
 
