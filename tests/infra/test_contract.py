@@ -10,8 +10,6 @@ from adda_dev.domain.contract import (
     CONTAINER_USERNAME,
     PROXY_PORT,
     PROXY_SOCKET,
-    RUN_TMPFS_SIZE,
-    TMPFS_MODE,
     ContractError,
     ContractSpec,
 )
@@ -94,6 +92,26 @@ def test_contractspec_defaults_proxy_port() -> None:
 def test_contractspec_defaults_issue_id_none() -> None:
     spec = _make_anthropic_spec()
     assert spec.issue_id is None
+
+
+def test_contractspec_defaults_cap_drop_all_true() -> None:
+    spec = _make_anthropic_spec()
+    assert spec.cap_drop_all is True
+
+
+def test_contractspec_defaults_no_new_privileges_true() -> None:
+    spec = _make_anthropic_spec()
+    assert spec.no_new_privileges is True
+
+
+def test_contractspec_defaults_read_only_true() -> None:
+    spec = _make_anthropic_spec()
+    assert spec.read_only is True
+
+
+def test_contractspec_defaults_network_none_true() -> None:
+    spec = _make_anthropic_spec()
+    assert spec.network_none is True
 
 
 # ---------------------------------------------------------------------------
@@ -238,9 +256,7 @@ def test_dockercontracttranslator_tmpfs_home_mount_in_args(tmp_path: Path) -> No
 def test_dockercontracttranslator_tmpfs_run_mount_in_args(tmp_path: Path) -> None:
     params = _translate(_make_anthropic_spec(), tmp_path)
     args = params.args  # type: ignore[union-attr]
-    assert any(
-        a.startswith("/run:") and f"size={RUN_TMPFS_SIZE}" in a and f"mode={TMPFS_MODE}" in a and "noexec" in a for a in args
-    )
+    assert any(a.startswith("/run:") and "size=32m" in a and "mode=700" in a and "noexec" in a for a in args)
 
 
 def test_dockercontracttranslator_tmpfs_workspace_size_reflects_spec(tmp_path: Path) -> None:

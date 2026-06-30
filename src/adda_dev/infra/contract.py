@@ -8,8 +8,6 @@ from ..domain.contract import (
     CONTAINER_GID,
     CONTAINER_UID,
     CONTAINER_USERNAME,
-    RUN_TMPFS_SIZE,
-    TMPFS_MODE,
     ContractError,
     ContractProcessParams,
     ContractSpec,
@@ -19,6 +17,8 @@ from ..domain.llm import AnthropicBackend, DeepSeekBackend
 
 _ETC_TIMEZONE: Path = Path("/etc/timezone")
 _ETC_LOCALTIME: Path = Path("/etc/localtime")
+_RUN_TMPFS_SIZE: str = "32m"
+_TMPFS_MODE: str = "700"
 
 
 def _detect_tz(tz_file: Path | None = None, localtime: Path | None = None) -> str:
@@ -88,8 +88,8 @@ def _build_env_args(spec: ContractSpec, tz: str) -> tuple[tuple[str, ...], dict[
 
 
 def _build_tmpfs_args(spec: ContractSpec) -> tuple[str, ...]:
-    tail = f"mode={TMPFS_MODE},uid={CONTAINER_UID},gid={CONTAINER_GID}"
-    run_opts = f"rw,nosuid,nodev,noexec,size={RUN_TMPFS_SIZE},{tail}"
+    tail = f"mode={_TMPFS_MODE},uid={CONTAINER_UID},gid={CONTAINER_GID}"
+    run_opts = f"rw,nosuid,nodev,noexec,size={_RUN_TMPFS_SIZE},{tail}"
     return (
         "--tmpfs",
         f"/workspace:rw,exec,nosuid,nodev,size={spec.tmpfs.workspace},{tail}",
@@ -109,13 +109,14 @@ class DockerContractTranslator(ContractTranslator):
         tz = _detect_tz()
         env_args, secrets = _build_env_args(spec, tz)
         tmpfs_args = _build_tmpfs_args(spec)
-        hardening_args = (
-            "--cap-drop",
-            "ALL",
-            "--security-opt",
-            "no-new-privileges",
-            "--read-only",
-            "--network",
-            "none",
-        )
+        hardening: list[str] = []
+        if spec.cap_drop_all:
+            hardening += ["--cap-drop", "ALL"]
+        if spec.no_new_privileges:
+            hardening += ["--security-opt", "no-new-privileges"]
+        if spec.read_only:
+            hardening += ["--read-only"]
+        if spec.network_none:
+            hardening += ["--network", "none"]
+        hardening_args = tuple(hardening)
         return ContractProcessParams(args=env_args + tmpfs_args + hardening_args, env=secrets)

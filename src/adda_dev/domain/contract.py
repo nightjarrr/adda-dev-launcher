@@ -16,8 +16,6 @@ CONTAINER_GID: int = 1000
 CONTAINER_USERNAME: str = "adda"
 PROXY_SOCKET: str = "/run/proxy.sock"
 PROXY_PORT: int = 8080
-RUN_TMPFS_SIZE: str = "32m"
-TMPFS_MODE: str = "700"
 
 
 class ContractError(AddaDevError):
@@ -35,6 +33,10 @@ class ContractSpec:
     proxy_socket: str = PROXY_SOCKET
     proxy_port: int = PROXY_PORT
     issue_id: int | None = None
+    cap_drop_all: bool = True
+    no_new_privileges: bool = True
+    read_only: bool = True
+    network_none: bool = True
 
 
 @dataclass(frozen=True)
