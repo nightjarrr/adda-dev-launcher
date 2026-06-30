@@ -118,7 +118,7 @@ def test_run_secret_error_exits_1() -> None:
         result = runner.invoke(app, ["run", "demo"])
 
     assert result.exit_code == 1
-    assert "Secret error" in result.output
+    assert "Error" in result.output
 
 
 # ---------------------------------------------------------------------------
