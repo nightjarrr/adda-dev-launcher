@@ -1,12 +1,12 @@
 """
-LLM infrastructure: config DTOs, backend factory functions, and resolve_backend().
+LLM infrastructure: config DTOs and LlmConfigBackendRepository.
 """
 
 from typing import assert_never
 
 from ..common import StrictModel
 from ..domain.credentials import SecretSource
-from ..domain.llm import AnthropicBackend, DeepSeekBackend, LlmBackend
+from ..domain.llm import AnthropicBackend, BackendRepository, DeepSeekBackend, LlmBackend
 
 
 class AnthropicConfigModel(StrictModel):
@@ -28,24 +28,6 @@ class DeepSeekConfigModel(StrictModel):
     effort_level: str = "max"
 
 
-def _build_anthropic_backend(config: AnthropicConfigModel, source: SecretSource) -> AnthropicBackend:
-    return AnthropicBackend(secret_name=config.secret_name, source=source)
-
-
-def _build_deepseek_backend(config: DeepSeekConfigModel, source: SecretSource) -> DeepSeekBackend:
-    return DeepSeekBackend(
-        secret_name=config.secret_name,
-        base_url=config.base_url,
-        model=config.model,
-        opus_model=config.opus_model,
-        sonnet_model=config.sonnet_model,
-        haiku_model=config.haiku_model,
-        subagent_model=config.subagent_model,
-        effort_level=config.effort_level,
-        source=source,
-    )
-
-
 class LlmConfig(StrictModel):
     """Registry of per-vendor LLM configuration DTOs."""
 
@@ -53,11 +35,29 @@ class LlmConfig(StrictModel):
     deepseek: DeepSeekConfigModel = DeepSeekConfigModel()
 
 
-def resolve_backend(backend: LlmBackend, config: LlmConfig, source: SecretSource) -> AnthropicBackend | DeepSeekBackend:
-    """Dispatch a LlmBackend enum value to its domain model, constructed from config."""
-    match backend:
-        case LlmBackend.anthropic:
-            return _build_anthropic_backend(config.anthropic, source)
-        case LlmBackend.deepseek:
-            return _build_deepseek_backend(config.deepseek, source)
-    assert_never(backend)
+class LlmConfigBackendRepository(BackendRepository):
+    """BackendRepository adapter that builds backend aggregates from LlmConfig."""
+
+    def __init__(self, config: LlmConfig, source: SecretSource) -> None:
+        self._config = config
+        self._source = source
+
+    def get(self, backend: LlmBackend) -> AnthropicBackend | DeepSeekBackend:
+        """Dispatch a LlmBackend enum value to its domain model, constructed from config."""
+        match backend:
+            case LlmBackend.anthropic:
+                return AnthropicBackend(secret_name=self._config.anthropic.secret_name, source=self._source)
+            case LlmBackend.deepseek:
+                c = self._config.deepseek
+                return DeepSeekBackend(
+                    secret_name=c.secret_name,
+                    base_url=c.base_url,
+                    model=c.model,
+                    opus_model=c.opus_model,
+                    sonnet_model=c.sonnet_model,
+                    haiku_model=c.haiku_model,
+                    subagent_model=c.subagent_model,
+                    effort_level=c.effort_level,
+                    source=self._source,
+                )
+        assert_never(backend)

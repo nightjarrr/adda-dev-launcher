@@ -3,6 +3,8 @@ pytest configuration.
 """
 
 from adda_dev.domain.credentials import SecretError, SecretSource
+from adda_dev.domain.llm import AnthropicBackend, BackendRepository, DeepSeekBackend, LlmBackend
+from adda_dev.domain.project import Project, ProjectNotFoundError, ProjectRepository
 
 
 class FakeSecretSource(SecretSource):
@@ -16,3 +18,43 @@ class FakeSecretSource(SecretSource):
         if value is None:
             raise SecretError(f"No secret for {service!r}/{key!r}")
         return value
+
+
+class FakeOutput:
+    """Output test double that captures calls."""
+
+    def __init__(self) -> None:
+        self.info_calls: list[str] = []
+        self.warning_calls: list[str] = []
+        self.error_calls: list[Exception] = []
+
+    def info(self, message: str) -> None:
+        self.info_calls.append(message)
+
+    def warning(self, message: str) -> None:
+        self.warning_calls.append(message)
+
+    def error(self, exc: Exception) -> None:
+        self.error_calls.append(exc)
+
+
+class FakeProjectRepository(ProjectRepository):
+    """ProjectRepository test double backed by a dict."""
+
+    def __init__(self, projects: dict[str, Project]) -> None:
+        self._projects = projects
+
+    def get(self, name: str) -> Project:
+        if name not in self._projects:
+            raise ProjectNotFoundError(f"Project {name!r} not found")
+        return self._projects[name]
+
+
+class FakeBackendRepository(BackendRepository):
+    """BackendRepository test double backed by a dict."""
+
+    def __init__(self, backends: dict[LlmBackend, AnthropicBackend | DeepSeekBackend]) -> None:
+        self._backends = backends
+
+    def get(self, backend: LlmBackend) -> AnthropicBackend | DeepSeekBackend:
+        return self._backends[backend]

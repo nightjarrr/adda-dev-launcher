@@ -1,6 +1,5 @@
 """Tests for adda_dev.infra.cli."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
@@ -15,8 +14,6 @@ from adda_dev.infra.llm import LlmConfig
 from tests.conftest import FakeSecretSource
 
 runner = CliRunner()
-
-DATA_DIR = Path(__file__).parent / "data" / "config"
 
 
 # ---------------------------------------------------------------------------
@@ -58,10 +55,15 @@ def test_run_prints_abbreviated_secrets_and_exits_0() -> None:
     mock_config.project_defaults = MagicMock()
     mock_config.llm = LlmConfig()
 
+    mock_project_repo = MagicMock()
+    mock_project_repo.get.return_value = proj
+    mock_backend_repo = MagicMock()
+    mock_backend_repo.get.return_value = backend
+
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
-        patch("adda_dev.infra.cli.load_project", return_value=proj),
-        patch("adda_dev.infra.cli.resolve_backend", return_value=backend),
+        patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
+        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
     ):
         result = runner.invoke(app, ["run", "demo"])
 
@@ -86,9 +88,13 @@ def test_run_project_not_found_exits_1() -> None:
     mock_config = MagicMock()
     mock_config.project_defaults = MagicMock()
 
+    mock_project_repo = MagicMock()
+    mock_project_repo.get.side_effect = ProjectNotFoundError("not found")
+
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
-        patch("adda_dev.infra.cli.load_project", side_effect=ProjectNotFoundError("not found")),
+        patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
+        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=MagicMock()),
     ):
         result = runner.invoke(app, ["run", "nonexistent"])
 
@@ -110,10 +116,15 @@ def test_run_secret_error_exits_1() -> None:
     mock_config.project_defaults = MagicMock()
     mock_config.llm = LlmConfig()
 
+    mock_project_repo = MagicMock()
+    mock_project_repo.get.return_value = proj
+    mock_backend_repo = MagicMock()
+    mock_backend_repo.get.return_value = backend
+
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
-        patch("adda_dev.infra.cli.load_project", return_value=proj),
-        patch("adda_dev.infra.cli.resolve_backend", return_value=backend),
+        patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
+        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
     ):
         result = runner.invoke(app, ["run", "demo"])
 
@@ -140,10 +151,15 @@ def test_run_with_issue_option_exits_0() -> None:
     mock_config.project_defaults = MagicMock()
     mock_config.llm = LlmConfig()
 
+    mock_project_repo = MagicMock()
+    mock_project_repo.get.return_value = proj
+    mock_backend_repo = MagicMock()
+    mock_backend_repo.get.return_value = backend
+
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
-        patch("adda_dev.infra.cli.load_project", return_value=proj),
-        patch("adda_dev.infra.cli.resolve_backend", return_value=backend),
+        patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
+        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
     ):
         result = runner.invoke(app, ["run", "demo", "--issue", "42"])
 
