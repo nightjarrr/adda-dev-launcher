@@ -5,14 +5,12 @@ adda-dev CLI entry point and composition root.
 import typer
 
 from ..app.run import run_session
-from ..domain.credentials import SecretError
-from ..domain.project import ProjectNotFoundError
+from ..common import AddaDevError
 from .config import load_app_config
 from .keyring_source import KeyringSecretSource
 from .llm import resolve_backend
 from .output import RichOutput
 from .project import load_project
-from .store import SchemaValidationError, TomlParseError
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -36,6 +34,6 @@ def run(
         project = load_project(project_name, config.project_defaults, source)
         backend = resolve_backend(project.backend, config.llm, source)
         run_session(project, backend, output)
-    except (ProjectNotFoundError, SchemaValidationError, TomlParseError, SecretError) as exc:
+    except AddaDevError as exc:
         output.error(exc)
         raise typer.Exit(1)
