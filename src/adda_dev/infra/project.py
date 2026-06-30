@@ -2,7 +2,6 @@
 Project infrastructure: file schema DTOs, TomlProjectRepository, and helpers.
 """
 
-from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field
@@ -14,7 +13,7 @@ from ..domain.llm import LlmBackend
 from ..domain.project import Project, ProjectNotFoundError, ProjectRepository
 from ..domain.tmpfs import TmpfsOverride
 from .config import ProjectDefaults
-from .store import load_toml, resolve_config_dir, validate_file_name
+from .store import StorageArea, load_toml, resolve_storage_root, validate_file_name
 
 PROJECTS_DIR_NAME = "projects"
 
@@ -46,10 +45,9 @@ def _build_github(file: GitHubFileModel, source: SecretSource) -> GitHub:
 class TomlProjectRepository(ProjectRepository):
     """ProjectRepository adapter that reads projects from the TOML config store."""
 
-    def __init__(self, defaults: ProjectDefaults, source: SecretSource, config_dir: Path | None = None) -> None:
+    def __init__(self, defaults: ProjectDefaults, source: SecretSource) -> None:
         self._defaults = defaults
         self._source = source
-        self._config_dir = config_dir
 
     def get(self, name: str) -> Project:
         """Load a project from the registry by name.
@@ -60,8 +58,7 @@ class TomlProjectRepository(ProjectRepository):
             TomlParseError: if the file contains invalid TOML.
             SchemaValidationError: if the file fails schema validation.
         """
-        cd = self._config_dir if self._config_dir is not None else resolve_config_dir()
-        path = cd / PROJECTS_DIR_NAME / f"{validate_file_name(name)}.toml"
+        path = resolve_storage_root(StorageArea.config) / PROJECTS_DIR_NAME / f"{validate_file_name(name)}.toml"
         if not path.exists():
             raise ProjectNotFoundError(f"Project {name!r} not found: {path} does not exist.")
         file = load_toml(path, ProjectFileModel)

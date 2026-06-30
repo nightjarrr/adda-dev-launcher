@@ -1,7 +1,8 @@
 """
-On-disk config store: file locations, name validation, and TOML load/validate.
+XDG-aware storage root resolution and TOML-based persistence for adda-dev storage areas.
 """
 
+import enum
 import os
 import re
 from pathlib import Path
@@ -16,6 +17,19 @@ from ..common import AddaDevError
 _NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
+class StorageArea(enum.Enum):
+    """XDG storage areas used by adda-dev. Enum values are the XDG env var names."""
+
+    config = "XDG_CONFIG_HOME"
+    runtime = "XDG_RUNTIME_DIR"
+
+
+_FALLBACKS: dict[StorageArea, Path] = {
+    StorageArea.config: Path.home() / ".config",
+    StorageArea.runtime: Path("/tmp"),
+}
+
+
 class TomlParseError(AddaDevError):
     """Raised when a TOML file cannot be parsed."""
 
@@ -28,10 +42,10 @@ class InvalidFileNameError(AddaDevError):
     """Raised when a name contains unsafe characters or is otherwise not a valid registry slug."""
 
 
-def resolve_config_dir() -> Path:
-    """Return the adda-dev config directory, honouring $XDG_CONFIG_HOME."""
-    xdg = os.environ.get("XDG_CONFIG_HOME", "")
-    base = Path(xdg) if xdg else Path.home() / ".config"
+def resolve_storage_root(area: StorageArea) -> Path:
+    """Return the adda-dev scoped root for the given XDG storage area."""
+    val = os.environ.get(area.value, "")
+    base = Path(val) if val else _FALLBACKS[area]
     return base / "adda-dev"
 
 
@@ -65,3 +79,13 @@ def load_toml[T: BaseModel](path: Path, model: type[T]) -> T:
         return model.model_validate(raw)
     except ValidationError as exc:
         raise SchemaValidationError(f"Schema validation failed for {path}: {exc}") from exc
+
+
+def write_toml(path: Path, model: BaseModel) -> None:
+    """Serialize a Pydantic model to a TOML file, omitting None-valued fields."""
+    data = model.model_dump(mode="python")
+    doc = tomlkit.document()
+    for key, value in data.items():
+        if value is not None:
+            doc.add(key, value)
+    path.write_text(tomlkit.dumps(doc))
