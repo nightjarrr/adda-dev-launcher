@@ -2,9 +2,13 @@
 pytest configuration.
 """
 
+from datetime import UTC, datetime
+from pathlib import Path
+
 from adda_dev.domain.credentials import SecretError, SecretSource
 from adda_dev.domain.llm import AnthropicBackend, BackendRepository, DeepSeekBackend, LlmBackend
 from adda_dev.domain.project import Project, ProjectNotFoundError, ProjectRepository
+from adda_dev.domain.session import Session, SessionRepository
 
 
 class FakeSecretSource(SecretSource):
@@ -58,3 +62,29 @@ class FakeBackendRepository(BackendRepository):
 
     def get(self, backend: LlmBackend) -> AnthropicBackend | DeepSeekBackend:
         return self._backends[backend]
+
+
+class FakeSessionRepository(SessionRepository):
+    """SessionRepository test double with deterministic IDs and in-memory state."""
+
+    def __init__(self) -> None:
+        self._sessions: dict[str, Session] = {}
+        self.terminated: list[str] = []
+        self._counter = 0
+
+    def create(self, project_name: str, issue_id: int | None = None) -> Session:
+        self._counter += 1
+        session_id = f"session-test-{self._counter:04d}"
+        session = Session(
+            session_id=session_id,
+            project_name=project_name,
+            started_at=datetime(2026, 1, 1, tzinfo=UTC),
+            runtime_dir=Path(f"/tmp/fake-adda-dev/{session_id}"),
+            issue_id=issue_id,
+        )
+        self._sessions[session_id] = session
+        return session
+
+    def terminate(self, session: Session) -> None:
+        self._sessions.pop(session.session_id, None)
+        self.terminated.append(session.session_id)

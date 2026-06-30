@@ -11,6 +11,7 @@ from .keyring_source import KeyringSecretSource
 from .llm import LlmConfigBackendRepository
 from .output import RichOutput
 from .project import TomlProjectRepository
+from .session import FsSessionRepository
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -33,7 +34,8 @@ def run(
         config = load_app_config()
         project_repo = TomlProjectRepository(config.project_defaults, source)
         backend_repo = LlmConfigBackendRepository(config.llm, source)
-        run_session(project_name, project_repo, backend_repo, output)
+        session_repo = FsSessionRepository()
+        run_session(project_name, project_repo, backend_repo, session_repo, output, issue_id)
     except AddaDevError as exc:
         output.error(exc)
         raise typer.Exit(1)

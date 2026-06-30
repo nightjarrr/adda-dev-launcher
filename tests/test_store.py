@@ -1,7 +1,8 @@
 """
-Tests for store.py: XDG resolution, validate_file_name, load_toml.
+Tests for store.py: XDG resolution, validate_file_name, load_toml, write_toml.
 """
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -10,33 +11,70 @@ from adda_dev.common import StrictModel
 from adda_dev.infra.store import (
     InvalidFileNameError,
     SchemaValidationError,
+    StorageArea,
     TomlParseError,
     load_toml,
-    resolve_config_dir,
+    resolve_storage_root,
     validate_file_name,
+    write_toml,
 )
 
 # ---------------------------------------------------------------------------
-# resolve_config_dir
+# resolve_storage_root — config area
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_config_dir_uses_home_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_storage_root_config_uses_home_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
-    result = resolve_config_dir()
+    result = resolve_storage_root(StorageArea.config)
     assert result == Path.home() / ".config" / "adda-dev"
 
 
-def test_resolve_config_dir_honours_xdg(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_resolve_storage_root_config_honours_xdg(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    result = resolve_config_dir()
+    result = resolve_storage_root(StorageArea.config)
     assert result == tmp_path / "adda-dev"
 
 
-def test_resolve_config_dir_empty_xdg_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_storage_root_config_empty_xdg_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", "")
-    result = resolve_config_dir()
+    result = resolve_storage_root(StorageArea.config)
     assert result == Path.home() / ".config" / "adda-dev"
+
+
+# ---------------------------------------------------------------------------
+# resolve_storage_root — runtime area
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_storage_root_runtime_uses_xdg_runtime_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    result = resolve_storage_root(StorageArea.runtime)
+    assert result == tmp_path / "adda-dev"
+
+
+def test_resolve_storage_root_runtime_falls_back_to_tmp(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    result = resolve_storage_root(StorageArea.runtime)
+    assert result == Path("/tmp") / "adda-dev"
+
+
+def test_resolve_storage_root_runtime_empty_xdg_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XDG_RUNTIME_DIR", "")
+    result = resolve_storage_root(StorageArea.runtime)
+    assert result == Path("/tmp") / "adda-dev"
+
+
+# ---------------------------------------------------------------------------
+# resolve_storage_root — adda-dev segment is always appended
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_storage_root_always_appends_adda_dev_segment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    result = resolve_storage_root(StorageArea.config)
+    assert result.name == "adda-dev"
+    assert result.parent == tmp_path
 
 
 # ---------------------------------------------------------------------------
@@ -138,3 +176,52 @@ def test_load_toml_extra_key_raises_schema_validation_error(tmp_path: Path) -> N
     extra_key.write_text('x = 1\ny = "ok"\nz = "extra"\n')
     with pytest.raises(SchemaValidationError):
         load_toml(extra_key, _SampleModel)
+
+
+# ---------------------------------------------------------------------------
+# write_toml — round-trip
+# ---------------------------------------------------------------------------
+
+
+class _RoundTripModel(StrictModel):
+    name: str
+    count: int
+    label: str | None = None
+
+
+def test_write_toml_round_trip(tmp_path: Path) -> None:
+    model = _RoundTripModel(name="test", count=7)
+    path = tmp_path / "out.toml"
+    write_toml(path, model)
+    loaded = load_toml(path, _RoundTripModel)
+    assert loaded.name == "test"
+    assert loaded.count == 7
+    assert loaded.label is None
+
+
+def test_write_toml_none_fields_omitted(tmp_path: Path) -> None:
+    model = _RoundTripModel(name="test", count=1, label=None)
+    path = tmp_path / "out.toml"
+    write_toml(path, model)
+    content = path.read_text()
+    assert "label" not in content
+
+
+# ---------------------------------------------------------------------------
+# write_toml — datetime round-trip
+# ---------------------------------------------------------------------------
+
+
+class _DateModel(StrictModel):
+    name: str
+    started_at: datetime
+
+
+def test_write_toml_datetime_round_trip(tmp_path: Path) -> None:
+    ts = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
+    model = _DateModel(name="demo", started_at=ts)
+    path = tmp_path / "date.toml"
+    write_toml(path, model)
+    loaded = load_toml(path, _DateModel)
+    assert loaded.started_at == ts
+    assert loaded.started_at.tzinfo is not None

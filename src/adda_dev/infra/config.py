@@ -8,7 +8,7 @@ from pathlib import Path
 from ..common import StrictModel
 from ..domain.tmpfs import TmpfsSizes
 from .llm import LlmConfig
-from .store import load_toml, resolve_config_dir
+from .store import StorageArea, load_toml, resolve_storage_root
 
 CONFIG_FILE_NAME = "config.toml"
 DEFAULT_ENVOY_IMAGE = "envoyproxy/envoy:v1.33.14"
@@ -42,7 +42,7 @@ class AppConfig(StrictModel):
 
 def load_app_config(config_dir: Path | None = None) -> AppConfig:
     """Load AppConfig from config.toml; return defaults if the file is absent."""
-    cd = config_dir if config_dir is not None else resolve_config_dir()
+    cd = config_dir if config_dir is not None else resolve_storage_root(StorageArea.config)
     path = cd / CONFIG_FILE_NAME
     if not path.exists():
         return AppConfig()

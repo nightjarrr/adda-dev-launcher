@@ -14,7 +14,7 @@ from ..domain.llm import LlmBackend
 from ..domain.project import Project, ProjectNotFoundError, ProjectRepository
 from ..domain.tmpfs import TmpfsOverride
 from .config import ProjectDefaults
-from .store import load_toml, resolve_config_dir, validate_file_name
+from .store import StorageArea, load_toml, resolve_storage_root, validate_file_name
 
 PROJECTS_DIR_NAME = "projects"
 
@@ -60,7 +60,7 @@ class TomlProjectRepository(ProjectRepository):
             TomlParseError: if the file contains invalid TOML.
             SchemaValidationError: if the file fails schema validation.
         """
-        cd = self._config_dir if self._config_dir is not None else resolve_config_dir()
+        cd = self._config_dir if self._config_dir is not None else resolve_storage_root(StorageArea.config)
         path = cd / PROJECTS_DIR_NAME / f"{validate_file_name(name)}.toml"
         if not path.exists():
             raise ProjectNotFoundError(f"Project {name!r} not found: {path} does not exist.")
