@@ -307,6 +307,58 @@ def test_dockercontracttranslator_hardening_network_none_in_args(tmp_path: Path)
     assert args[idx + 1] == "none"
 
 
+def test_dockercontracttranslator_hardening_cap_drop_absent_when_false(tmp_path: Path) -> None:
+    from adda_dev.domain.github import GitHub
+
+    source = FakeSecretSource(
+        {("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "claude-key"): "claude_test"}
+    )
+    github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
+    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), cap_drop_all=False)
+    params = _translate(spec, tmp_path)
+    assert "--cap-drop" not in params.args  # type: ignore[union-attr]
+
+
+def test_dockercontracttranslator_hardening_no_new_privileges_absent_when_false(tmp_path: Path) -> None:
+    from adda_dev.domain.github import GitHub
+
+    source = FakeSecretSource(
+        {("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "claude-key"): "claude_test"}
+    )
+    github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
+    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), no_new_privileges=False)
+    params = _translate(spec, tmp_path)
+    assert "no-new-privileges" not in params.args  # type: ignore[union-attr]
+
+
+def test_dockercontracttranslator_hardening_read_only_absent_when_false(tmp_path: Path) -> None:
+    from adda_dev.domain.github import GitHub
+
+    source = FakeSecretSource(
+        {("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "claude-key"): "claude_test"}
+    )
+    github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
+    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), read_only=False)
+    params = _translate(spec, tmp_path)
+    assert "--read-only" not in params.args  # type: ignore[union-attr]
+
+
+def test_dockercontracttranslator_hardening_network_none_absent_when_false(tmp_path: Path) -> None:
+    from adda_dev.domain.github import GitHub
+
+    source = FakeSecretSource(
+        {("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "claude-key"): "claude_test"}
+    )
+    github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
+    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), network_none=False)
+    params = _translate(spec, tmp_path)
+    assert "--network" not in params.args  # type: ignore[union-attr]
+
+
 # ---------------------------------------------------------------------------
 # DockerContractTranslator — optional vars
 # ---------------------------------------------------------------------------
