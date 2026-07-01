@@ -5,10 +5,12 @@ pytest configuration.
 from datetime import UTC, datetime
 from pathlib import Path
 
+from adda_dev.domain.contract import ContractSpec
 from adda_dev.domain.credentials import SecretError, SecretSource
 from adda_dev.domain.llm import AnthropicBackend, BackendRepository, DeepSeekBackend, LlmBackend
 from adda_dev.domain.project import Project, ProjectNotFoundError, ProjectRepository
 from adda_dev.domain.session import Session, SessionRepository
+from adda_dev.domain.session_manager import SessionManager, Window
 
 
 class FakeSecretSource(SecretSource):
@@ -69,7 +71,7 @@ class FakeSessionRepository(SessionRepository):
 
     def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
-        self.terminated: list[str] = []
+        self.deleted: list[str] = []
         self._counter = 0
 
     def create(self, project_name: str, issue_id: int | None = None) -> Session:
@@ -85,6 +87,50 @@ class FakeSessionRepository(SessionRepository):
         self._sessions[session_id] = session
         return session
 
-    def terminate(self, session: Session) -> None:
+    def delete(self, session: Session) -> None:
         self._sessions.pop(session.session_id, None)
+        self.deleted.append(session.session_id)
+
+
+class FakeSessionManager(SessionManager):
+    """SessionManager test double that records launch and terminate calls without running real processes."""
+
+    def __init__(self) -> None:
+        self._fake_repo = FakeSessionRepository()
+        super().__init__(self._fake_repo, _FakeContractTranslator(), FakeOutput())
+        self.launched: list[tuple[str, ContractSpec]] = []
+        self.terminated: list[str] = []
+
+    def create_window(self, name: str) -> Window:
+        return _FakeWindow(name)
+
+    def launch(self, project_name: str, spec: ContractSpec) -> Session:
+        session = self._fake_repo.create(project_name, spec.issue_id)
+        self.launched.append((project_name, spec))
+        return session
+
+    def terminate(self, session: Session) -> None:
+        self._fake_repo.delete(session)
         self.terminated.append(session.session_id)
+
+
+class _FakeWindow(Window):
+    """Window test double that records calls without running real processes."""
+
+    def run(self, cmd: list[str], env: dict[str, str]) -> None:
+        pass
+
+    def attach(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeContractTranslator:
+    """ContractTranslator test double that returns a fixed no-op command."""
+
+    def translate(self, spec: ContractSpec) -> object:
+        from adda_dev.domain.contract import ContractProcessParams
+
+        return ContractProcessParams(args=("true",), env={})

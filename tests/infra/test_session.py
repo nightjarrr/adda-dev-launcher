@@ -90,23 +90,23 @@ def test_fssessionrepository_create_none_issue_id_omitted_from_toml(tmp_path: Pa
 
 
 # ---------------------------------------------------------------------------
-# FsSessionRepository.terminate
+# FsSessionRepository.delete
 # ---------------------------------------------------------------------------
 
 
-def test_fssessionrepository_terminate_removes_runtime_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fssessionrepository_delete_removes_runtime_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     repo = FsSessionRepository()
     session = repo.create("demo")
     assert session.runtime_dir.exists()
-    repo.terminate(session)
+    repo.delete(session)
     assert not session.runtime_dir.exists()
 
 
-def test_fssessionrepository_terminate_is_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fssessionrepository_delete_is_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     repo = FsSessionRepository()
     session = repo.create("demo")
-    repo.terminate(session)
+    repo.delete(session)
     # Second call must not raise
-    repo.terminate(session)
+    repo.delete(session)

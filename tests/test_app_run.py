@@ -3,15 +3,14 @@
 import pytest
 
 from adda_dev.app.run import run_session
-from adda_dev.domain.credentials import SecretError
 from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicBackend, LlmBackend
 from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
-from tests.conftest import FakeBackendRepository, FakeOutput, FakeProjectRepository, FakeSecretSource, FakeSessionRepository
+from tests.conftest import FakeBackendRepository, FakeOutput, FakeProjectRepository, FakeSecretSource, FakeSessionManager
 
 
-def _make_fake_source_with_secrets() -> FakeSecretSource:
+def _make_fake_source() -> FakeSecretSource:
     return FakeSecretSource(
         {
             ("adda-dev:github", "demo-token"): "ghp_secret_token",
@@ -36,46 +35,102 @@ def _make_backend(source: FakeSecretSource) -> AnthropicBackend:
 
 
 # ---------------------------------------------------------------------------
-# run_session — happy path
+# run_session — output
 # ---------------------------------------------------------------------------
 
 
-def test_run_session_info_called_with_secrets() -> None:
-    fake = _make_fake_source_with_secrets()
-    project = _make_project(fake)
-    backend = _make_backend(fake)
+def test_run_session_output_includes_project_name() -> None:
+    source = _make_fake_source()
+    project = _make_project(source)
+    backend = _make_backend(source)
     project_repo = FakeProjectRepository({"demo": project})
     backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
-    session_repo = FakeSessionRepository()
+    session_manager = FakeSessionManager()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, session_repo, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output)
 
-    assert len(output.info_calls) >= 1
-    assert any("ghp_" in msg for msg in output.info_calls)
-    assert any("clau" in msg for msg in output.info_calls)
+    assert any("demo" in msg for msg in output.info_calls)
 
 
-# ---------------------------------------------------------------------------
-# run_session — SecretError propagates
-# ---------------------------------------------------------------------------
-
-
-def test_run_session_propagates_secret_error() -> None:
-    empty_store = FakeSecretSource()
-    project = _make_project(empty_store)
-    backend = _make_backend(empty_store)
+def test_run_session_output_includes_image() -> None:
+    source = _make_fake_source()
+    project = _make_project(source)
+    backend = _make_backend(source)
     project_repo = FakeProjectRepository({"demo": project})
     backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
-    session_repo = FakeSessionRepository()
+    session_manager = FakeSessionManager()
     output = FakeOutput()
 
-    with pytest.raises(SecretError):
-        run_session("demo", project_repo, backend_repo, session_repo, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output)
+
+    assert any("ghcr.io" in msg for msg in output.info_calls)
+
+
+def test_run_session_output_includes_backend() -> None:
+    source = _make_fake_source()
+    project = _make_project(source)
+    backend = _make_backend(source)
+    project_repo = FakeProjectRepository({"demo": project})
+    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
+    session_manager = FakeSessionManager()
+    output = FakeOutput()
+
+    run_session("demo", project_repo, backend_repo, session_manager, output)
+
+    assert any("anthropic" in msg for msg in output.info_calls)
 
 
 # ---------------------------------------------------------------------------
-# run_session — project not found propagates
+# run_session — session lifecycle
+# ---------------------------------------------------------------------------
+
+
+def test_run_session_calls_launch_with_correct_project_name() -> None:
+    source = _make_fake_source()
+    project = _make_project(source)
+    backend = _make_backend(source)
+    project_repo = FakeProjectRepository({"demo": project})
+    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
+    session_manager = FakeSessionManager()
+    output = FakeOutput()
+
+    run_session("demo", project_repo, backend_repo, session_manager, output)
+
+    assert len(session_manager.launched) == 1
+    assert session_manager.launched[0][0] == "demo"
+
+
+def test_run_session_calls_terminate_after_launch() -> None:
+    source = _make_fake_source()
+    project = _make_project(source)
+    backend = _make_backend(source)
+    project_repo = FakeProjectRepository({"demo": project})
+    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
+    session_manager = FakeSessionManager()
+    output = FakeOutput()
+
+    run_session("demo", project_repo, backend_repo, session_manager, output)
+
+    assert len(session_manager.terminated) == 1
+
+
+def test_run_session_launch_passes_issue_id_in_spec() -> None:
+    source = _make_fake_source()
+    project = _make_project(source)
+    backend = _make_backend(source)
+    project_repo = FakeProjectRepository({"demo": project})
+    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
+    session_manager = FakeSessionManager()
+    output = FakeOutput()
+
+    run_session("demo", project_repo, backend_repo, session_manager, output, issue_id=42)
+
+    assert session_manager.launched[0][1].issue_id == 42
+
+
+# ---------------------------------------------------------------------------
+# run_session — error propagation
 # ---------------------------------------------------------------------------
 
 
@@ -84,57 +139,8 @@ def test_run_session_propagates_project_not_found() -> None:
 
     project_repo = FakeProjectRepository({})
     backend_repo = FakeBackendRepository({})
-    session_repo = FakeSessionRepository()
+    session_manager = FakeSessionManager()
     output = FakeOutput()
 
     with pytest.raises(ProjectNotFoundError):
-        run_session("missing", project_repo, backend_repo, session_repo, output)
-
-
-# ---------------------------------------------------------------------------
-# run_session — session lifecycle
-# ---------------------------------------------------------------------------
-
-
-def test_run_session_session_terminated_in_happy_path() -> None:
-    fake = _make_fake_source_with_secrets()
-    project = _make_project(fake)
-    backend = _make_backend(fake)
-    project_repo = FakeProjectRepository({"demo": project})
-    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
-    session_repo = FakeSessionRepository()
-    output = FakeOutput()
-
-    run_session("demo", project_repo, backend_repo, session_repo, output)
-
-    assert len(session_repo.terminated) > 0
-
-
-def test_run_session_session_terminated_when_secret_error_raised() -> None:
-    empty_store = FakeSecretSource()
-    project = _make_project(empty_store)
-    backend = _make_backend(empty_store)
-    project_repo = FakeProjectRepository({"demo": project})
-    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
-    session_repo = FakeSessionRepository()
-    output = FakeOutput()
-
-    with pytest.raises(SecretError):
-        run_session("demo", project_repo, backend_repo, session_repo, output)
-
-    assert len(session_repo.terminated) > 0
-
-
-def test_run_session_output_includes_session_fields() -> None:
-    fake = _make_fake_source_with_secrets()
-    project = _make_project(fake)
-    backend = _make_backend(fake)
-    project_repo = FakeProjectRepository({"demo": project})
-    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
-    session_repo = FakeSessionRepository()
-    output = FakeOutput()
-
-    run_session("demo", project_repo, backend_repo, session_repo, output)
-
-    assert any("session-test-" in msg for msg in output.info_calls)
-    assert any("demo" in msg for msg in output.info_calls)
+        run_session("missing", project_repo, backend_repo, session_manager, output)
