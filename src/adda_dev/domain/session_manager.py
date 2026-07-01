@@ -42,17 +42,19 @@ class SessionManager(abc.ABC):
         self._translator = translator
         self._output = output
         self._windows: list[Window] = []
+        self._session: Session | None = None
 
     def launch(self, project_name: str, spec: ContractSpec) -> Session:
         """Create a session, open the primary window, run the command, and block until it exits."""
         session = self._repo.create(project_name, spec.issue_id)
+        self._session = session
         params = self._translator.translate(spec)
         full_env = {**os.environ, **params.env}
         self._output.info(f"Session:  {session.session_id}")
         self._output.info(f"Command:  {' '.join(params.args)}")
-        primary = self.create_window(session.session_id)
+        primary = self.create_window("adda-dev primary")
         self._windows.append(primary)
-        self._open_additional_windows(session, spec)
+        self._open_secondary_windows(session, spec)
         primary.run(list(params.args), full_env)
         primary.attach()
         return session
@@ -68,7 +70,7 @@ class SessionManager(abc.ABC):
     def create_window(self, name: str) -> Window:
         """Return a new Window for the given session name."""
 
-    def _open_additional_windows(self, session: Session, spec: ContractSpec) -> None:
+    def _open_secondary_windows(self, session: Session, spec: ContractSpec) -> None:
         """Hook: open extra windows (e.g. shell, logs). No-op for Direct mode."""
 
     def _teardown(self, session: Session) -> None:
