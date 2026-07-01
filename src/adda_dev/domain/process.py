@@ -35,5 +35,5 @@ class ProcessRunner(abc.ABC):
     """Port for launching subprocesses."""
 
     @abc.abstractmethod
-    def start(self, cmd: list[str], env: dict[str, str] | None = None) -> ProcessHandle:
+    def run(self, cmd: list[str], env: dict[str, str] | None = None) -> ProcessHandle:
         """Launch cmd and return a handle to the running process."""

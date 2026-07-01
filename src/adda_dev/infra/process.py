@@ -38,7 +38,7 @@ class _DefaultHandle(ProcessHandle):
 class DefaultRunner(ProcessRunner):
     """ProcessRunner that launches processes without redirecting stdout or stderr."""
 
-    def start(self, cmd: list[str], env: dict[str, str] | None = None) -> ProcessHandle:
+    def run(self, cmd: list[str], env: dict[str, str] | None = None) -> ProcessHandle:
         try:
             process: subprocess.Popen[bytes] = subprocess.Popen(cmd, env=env)
         except OSError as exc:
@@ -73,16 +73,20 @@ class _CapturedHandle(ProcessHandle):
             raise ProcessError(str(exc)) from exc
 
     def stdout(self) -> str | None:
+        if self._returncode is None:
+            raise RuntimeError("stdout is not available before wait()")
         return self._stdout
 
     def stderr(self) -> str | None:
+        if self._returncode is None:
+            raise RuntimeError("stderr is not available before wait()")
         return self._stderr
 
 
 class CapturedOutputRunner(ProcessRunner):
     """ProcessRunner that captures stdout and stderr from launched processes."""
 
-    def start(self, cmd: list[str], env: dict[str, str] | None = None) -> ProcessHandle:
+    def run(self, cmd: list[str], env: dict[str, str] | None = None) -> ProcessHandle:
         try:
             process: subprocess.Popen[str] = subprocess.Popen(
                 cmd,
