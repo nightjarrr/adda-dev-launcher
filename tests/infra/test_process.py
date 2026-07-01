@@ -56,7 +56,7 @@ def test_defaultrunner_stderr_raises() -> None:
 
 def test_defaultrunner_terminate_exits_process() -> None:
     runner = DefaultRunner()
-    handle = runner.run(["cat"])
+    handle = runner.run(["sleep", "infinity"])
     handle.terminate()
     assert handle.wait() != 0
 
@@ -137,7 +137,7 @@ def test_capturedoutputrunner_stderr_raises_before_wait() -> None:
 
 def test_capturedoutputrunner_terminate_exits_process() -> None:
     runner = CapturedOutputRunner()
-    handle = runner.run(["cat"])
+    handle = runner.run(["sleep", "infinity"])
     handle.terminate()
     assert handle.wait() != 0
 

@@ -105,12 +105,12 @@ class FakeSessionManager(SessionManager):
         return _FakeWindow(name)
 
     def launch(self, project_name: str, spec: ContractSpec) -> Session:
-        session = self._fake_repo.create(project_name, spec.issue_id)
+        session = super().launch(project_name, spec)
         self.launched.append((project_name, spec))
         return session
 
     def terminate(self, session: Session) -> None:
-        self._fake_repo.delete(session)
+        super().terminate(session)
         self.terminated.append(session.session_id)
 
 
