@@ -28,10 +28,10 @@ class _DefaultHandle(ProcessHandle):
         except OSError as exc:
             raise ProcessError(str(exc)) from exc
 
-    def stdout(self) -> str | None:
+    def stdout(self) -> str:
         raise RuntimeError("DefaultRunner does not capture stdout")
 
-    def stderr(self) -> str | None:
+    def stderr(self) -> str:
         raise RuntimeError("DefaultRunner does not capture stderr")
 
 
@@ -72,14 +72,16 @@ class _CapturedHandle(ProcessHandle):
         except OSError as exc:
             raise ProcessError(str(exc)) from exc
 
-    def stdout(self) -> str | None:
+    def stdout(self) -> str:
         if self._returncode is None:
             raise RuntimeError("stdout is not available before wait()")
+        assert self._stdout is not None
         return self._stdout
 
-    def stderr(self) -> str | None:
+    def stderr(self) -> str:
         if self._returncode is None:
             raise RuntimeError("stderr is not available before wait()")
+        assert self._stderr is not None
         return self._stderr
 
 

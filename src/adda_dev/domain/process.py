@@ -23,12 +23,12 @@ class ProcessHandle(abc.ABC):
         """Send SIGTERM to the process."""
 
     @abc.abstractmethod
-    def stdout(self) -> str | None:
-        """Return captured stdout, or None if not yet available."""
+    def stdout(self) -> str:
+        """Return captured stdout."""
 
     @abc.abstractmethod
-    def stderr(self) -> str | None:
-        """Return captured stderr, or None if not yet available."""
+    def stderr(self) -> str:
+        """Return captured stderr."""
 
 
 class ProcessRunner(abc.ABC):
