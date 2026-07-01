@@ -1,5 +1,5 @@
 """
-Session infrastructure: filesystem-backed session repository.
+Session infrastructure: filesystem-backed session repository, Direct window, and Direct session manager.
 """
 
 import shutil
@@ -7,7 +7,10 @@ import uuid
 from datetime import UTC, datetime
 
 from ..common import StrictModel
+from ..domain.process import ProcessHandle
 from ..domain.session import Session, SessionRepository
+from ..domain.session_manager import SessionManager, Window
+from .process import DefaultRunner
 from .store import StorageArea, resolve_storage_root, write_toml
 
 
@@ -48,5 +51,30 @@ class FsSessionRepository(SessionRepository):
             issue_id=issue_id,
         )
 
-    def terminate(self, session: Session) -> None:
+    def delete(self, session: Session) -> None:
         shutil.rmtree(session.runtime_dir, ignore_errors=True)
+
+
+class DirectWindow(Window):
+    """Window implementation that runs a subprocess with inherited stdio."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self._handle: ProcessHandle | None = None
+
+    def run(self, cmd: list[str], env: dict[str, str]) -> None:
+        self._handle = DefaultRunner().run(cmd, env)
+
+    def attach(self) -> None:
+        assert self._handle is not None
+        self._handle.wait()
+
+    def close(self) -> None:
+        pass  # process already exited when attach() returned; no teardown needed
+
+
+class DirectSessionManager(SessionManager):
+    """SessionManager that runs commands directly in the current terminal (no tmux)."""
+
+    def create_window(self, name: str) -> Window:
+        return DirectWindow(name)

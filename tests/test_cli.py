@@ -37,11 +37,11 @@ def _make_backend(source: SecretSource) -> AnthropicBackend:
 
 
 # ---------------------------------------------------------------------------
-# run — happy path: abbreviated tokens printed, exit 0
+# run — happy path: project/image/backend info printed, exit 0
 # ---------------------------------------------------------------------------
 
 
-def test_run_prints_abbreviated_secrets_and_exits_0() -> None:
+def test_run_displays_project_info_and_exits_0() -> None:
     fake = FakeSecretSource(
         {
             ("adda-dev:github", "demo-token"): "ghp_secret_token",
@@ -59,17 +59,18 @@ def test_run_prints_abbreviated_secrets_and_exits_0() -> None:
     mock_project_repo.get.return_value = proj
     mock_backend_repo = MagicMock()
     mock_backend_repo.get.return_value = backend
+    mock_session_manager = MagicMock()
+    mock_session_manager.launch.return_value = MagicMock(session_id="session-test-0001")
 
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
         patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
     ):
         result = runner.invoke(app, ["run", "demo"])
 
     assert result.exit_code == 0
-    assert "ghp_" in result.output
-    assert "clau" in result.output
 
 
 def test_run_no_project_name_exits_nonzero() -> None:
@@ -95,38 +96,9 @@ def test_run_project_not_found_exits_1() -> None:
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
         patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=MagicMock()),
+        patch("adda_dev.infra.cli.DirectSessionManager", return_value=MagicMock()),
     ):
         result = runner.invoke(app, ["run", "nonexistent"])
-
-    assert result.exit_code == 1
-    assert "Error" in result.output
-
-
-# ---------------------------------------------------------------------------
-# run — secret error → exit 1
-# ---------------------------------------------------------------------------
-
-
-def test_run_secret_error_exits_1() -> None:
-    empty_store = FakeSecretSource()
-    proj = _make_project(empty_store)
-    backend = _make_backend(empty_store)
-
-    mock_config = MagicMock()
-    mock_config.project_defaults = MagicMock()
-    mock_config.llm = LlmConfig()
-
-    mock_project_repo = MagicMock()
-    mock_project_repo.get.return_value = proj
-    mock_backend_repo = MagicMock()
-    mock_backend_repo.get.return_value = backend
-
-    with (
-        patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
-        patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
-        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
-    ):
-        result = runner.invoke(app, ["run", "demo"])
 
     assert result.exit_code == 1
     assert "Error" in result.output
@@ -155,11 +127,14 @@ def test_run_with_issue_option_exits_0() -> None:
     mock_project_repo.get.return_value = proj
     mock_backend_repo = MagicMock()
     mock_backend_repo.get.return_value = backend
+    mock_session_manager = MagicMock()
+    mock_session_manager.launch.return_value = MagicMock(session_id="session-test-0001")
 
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
         patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
     ):
         result = runner.invoke(app, ["run", "demo", "--issue", "42"])
 

@@ -120,3 +120,10 @@ class DockerContractTranslator(ContractTranslator):
             hardening += ["--network", "none"]
         hardening_args = tuple(hardening)
         return ContractProcessParams(args=env_args + tmpfs_args + hardening_args, env=secrets)
+
+
+class BashTranslator(ContractTranslator):
+    """Stub translator for #92: runs /bin/bash regardless of spec."""
+
+    def translate(self, spec: ContractSpec) -> ContractProcessParams:
+        return ContractProcessParams(args=("/bin/bash",), env={})

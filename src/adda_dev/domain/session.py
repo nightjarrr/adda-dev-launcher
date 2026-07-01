@@ -26,10 +26,10 @@ class Session:
 
 
 class SessionRepository(abc.ABC):
-    """Secondary port for creating and terminating Session aggregates."""
+    """Secondary port for creating and deleting Session aggregates."""
 
     @abc.abstractmethod
     def create(self, project_name: str, issue_id: int | None = None) -> Session: ...
 
     @abc.abstractmethod
-    def terminate(self, session: Session) -> None: ...
+    def delete(self, session: Session) -> None: ...
