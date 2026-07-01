@@ -30,7 +30,7 @@ class FsSessionRepository(SessionRepository):
         self._runtime_base = resolve_storage_root(StorageArea.runtime)
 
     def create(self, project_name: str, issue_id: int | None = None) -> Session:
-        session_id = f"session-{uuid.uuid4()}"
+        session_id = f"session-{uuid.uuid4().hex[:8]}"
         runtime_dir = self._runtime_base / session_id
         runtime_dir.mkdir(parents=True, mode=0o700)
         started_at = datetime.now(UTC)
