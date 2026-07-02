@@ -4,7 +4,7 @@ run_session use case: start a session and run the primary process.
 
 from ..common import Output
 from ..domain.container import ContainerEngine
-from ..domain.contract import ContractSpec
+from ..domain.contract import ContractSpecDraft
 from ..domain.llm import BackendRepository
 from ..domain.project import ProjectRepository
 from ..domain.session_manager import SessionManager
@@ -30,12 +30,5 @@ def run_session(
         output.warning(
             "Running under root Docker; a container escape would hold host-root privileges — rootless Docker is recommended."
         )
-    spec = ContractSpec(
-        github=project.github,
-        backend=backend,
-        image=project.image,
-        tmpfs=project.tmpfs,
-        issue_id=issue_id,
-    )
-    session = session_manager.launch(project_name, spec)
-    session_manager.terminate(session)
+    draft = ContractSpecDraft.from_project(project, backend, issue_id)
+    session_manager.run(project_name, draft)

@@ -7,8 +7,9 @@ import os
 
 from ..common import Output
 from ..domain.container import ContainerEngine
-from ..domain.contract import ContractSpec, ContractTranslator
+from ..domain.contract import ContractSpecDraft, ContractTranslator
 from ..domain.process import ProcessHandle, ProcessRunner
+from ..domain.proxy import ProxySidecar
 from ..domain.session import Session, SessionRepository
 
 
@@ -72,19 +73,30 @@ class SessionManager(abc.ABC):
         engine: ContainerEngine,
         runner: ProcessRunner,
         output: Output,
+        sidecar: ProxySidecar,
     ) -> None:
         self._repo = session_repo
         self._translator = translator
         self._engine = engine
         self._runner = runner
         self._output = output
+        self._sidecar = sidecar
         self._windows: list[Window] = []
         self._session: Session | None = None
 
-    def launch(self, project_name: str, spec: ContractSpec) -> Session:
-        """Create a session, pull the image, open the primary window running the container, and block until it exits."""
-        session = self._repo.create(project_name, spec.issue_id)
+    def run(self, project_name: str, draft: ContractSpecDraft) -> None:
+        """Launch a session and guarantee teardown even when launch raises."""
+        try:
+            self.launch(project_name, draft)
+        finally:
+            self.terminate()
+
+    def launch(self, project_name: str, draft: ContractSpecDraft) -> None:
+        """Create a session, start the sidecar, pull and run the main container."""
+        session = self._repo.create(project_name, draft.issue_id)
         self._session = session
+        host_socket = self._sidecar.start(session.runtime_dir)
+        spec = draft.with_session(host_socket)
         params = self._translator.translate(spec)
         full_env = {**os.environ, **params.env}
         self._output.info(f"Session:  {session.session_id}")
@@ -94,21 +106,22 @@ class SessionManager(abc.ABC):
         self._engine.run_it(WindowedRunner(primary), spec.image, session.session_id, list(params.args), full_env, remove=True)
         self._open_secondary_windows(session, spec)
         primary.attach()
-        return session
 
-    def terminate(self, session: Session) -> None:
-        """Close all tracked windows, run teardown hook, then delete the session record."""
+    def terminate(self) -> None:
+        """Close all tracked windows, run teardown hook, stop sidecar, then delete the session record."""
         for window in self._windows:
             window.close()
-        self._teardown(session)
-        self._repo.delete(session)
+        self._teardown()
+        self._sidecar.stop()
+        if self._session is not None:
+            self._repo.delete(self._session)
 
     @abc.abstractmethod
     def create_window(self, name: str) -> Window:
         """Return a new Window for the given session name."""
 
-    def _open_secondary_windows(self, session: Session, spec: ContractSpec) -> None:
+    def _open_secondary_windows(self, session: Session, spec: object) -> None:
         """Hook: open extra windows (e.g. shell, logs). No-op for Direct mode."""
 
-    def _teardown(self, session: Session) -> None:
+    def _teardown(self) -> None:
         """Hook: perform mode-specific teardown (e.g. kill tmux server). No-op for Direct mode."""

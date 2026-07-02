@@ -273,6 +273,36 @@ def test_dockerengine_methods_return_runner_handle(rootless_docker_path: Path) -
     assert engine.exec_it(rec, "c", ["sh"]) is rec.last_handle
     assert engine.logs_f(rec, "c") is rec.last_handle
     assert engine.inspect(rec, "c") is rec.last_handle
+    assert engine.rm(rec, "c") is rec.last_handle
+    assert engine.logs(rec, "c") is rec.last_handle
+
+
+def test_dockerengine_rm_argv_without_force(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.rm(rec, "my-container")
+    assert rec.last_cmd == ["docker", "rm", "my-container"]
+
+
+def test_dockerengine_rm_argv_with_force(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.rm(rec, "my-container", force=True)
+    assert rec.last_cmd == ["docker", "rm", "-f", "my-container"]
+
+
+def test_dockerengine_rm_without_force_no_f_flag(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.rm(rec, "my-container", force=False)
+    assert "-f" not in rec.last_cmd
+
+
+def test_dockerengine_logs_argv(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.logs(rec, "my-container")
+    assert rec.last_cmd == ["docker", "logs", "my-container"]
 
 
 # ---------------------------------------------------------------------------

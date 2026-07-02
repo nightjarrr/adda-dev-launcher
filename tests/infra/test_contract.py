@@ -12,18 +12,22 @@ from adda_dev.domain.contract import (
     PROXY_SOCKET,
     ContractError,
     ContractSpec,
+    ContractSpecDraft,
 )
 from adda_dev.domain.llm import AnthropicBackend, DeepSeekBackend
+from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
 from adda_dev.infra.contract import DockerContractTranslator, _detect_tz
 from tests.conftest import FakeSecretSource
+
+_FAKE_HOST_SOCKET = Path("/tmp/test-session/proxy_socket/proxy.sock")
 
 # ---------------------------------------------------------------------------
 # Test helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_anthropic_spec() -> ContractSpec:
+def _make_github_and_source() -> tuple[object, FakeSecretSource]:
     source = FakeSecretSource(
         {
             ("adda-dev:github", "gh-token"): "ghp_test",
@@ -33,8 +37,27 @@ def _make_anthropic_spec() -> ContractSpec:
     from adda_dev.domain.github import GitHub
 
     github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
+    return github, source
+
+
+def _make_anthropic_spec() -> ContractSpec:
+    from adda_dev.domain.github import GitHub
+
+    source = FakeSecretSource(
+        {
+            ("adda-dev:github", "gh-token"): "ghp_test",
+            ("adda-dev:anthropic", "claude-key"): "claude_test",
+        }
+    )
+    github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
     backend = AnthropicBackend(secret_name="claude-key", source=source)
-    return ContractSpec(github=github, backend=backend, image="ghcr.io/test/adda:latest", tmpfs=TmpfsSizes())
+    return ContractSpec(
+        github=github,
+        backend=backend,
+        image="ghcr.io/test/adda:latest",
+        tmpfs=TmpfsSizes(),
+        proxy_socket_host_path=_FAKE_HOST_SOCKET,
+    )
 
 
 def _make_deepseek_spec() -> ContractSpec:
@@ -58,7 +81,13 @@ def _make_deepseek_spec() -> ContractSpec:
         effort_level="normal",
         source=source,
     )
-    return ContractSpec(github=github, backend=backend, image="ghcr.io/test/adda:latest", tmpfs=TmpfsSizes())
+    return ContractSpec(
+        github=github,
+        backend=backend,
+        image="ghcr.io/test/adda:latest",
+        tmpfs=TmpfsSizes(),
+        proxy_socket_host_path=_FAKE_HOST_SOCKET,
+    )
 
 
 def _translate(spec: ContractSpec, tmp_path: Path) -> object:
@@ -270,7 +299,13 @@ def test_dockercontracttranslator_tmpfs_workspace_size_reflects_spec(tmp_path: P
 
     github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
     backend = AnthropicBackend(secret_name="claude-key", source=source)
-    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(workspace="1024m"))
+    spec = ContractSpec(
+        github=github,
+        backend=backend,
+        image="img",
+        tmpfs=TmpfsSizes(workspace="1024m"),
+        proxy_socket_host_path=_FAKE_HOST_SOCKET,
+    )
     params = _translate(spec, tmp_path)
     args = params.args  # type: ignore[union-attr]
     assert any("/workspace:" in a and "size=1024m" in a for a in args)
@@ -315,7 +350,14 @@ def test_dockercontracttranslator_hardening_cap_drop_absent_when_false(tmp_path:
     )
     github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
     backend = AnthropicBackend(secret_name="claude-key", source=source)
-    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), cap_drop_all=False)
+    spec = ContractSpec(
+        github=github,
+        backend=backend,
+        image="img",
+        tmpfs=TmpfsSizes(),
+        proxy_socket_host_path=_FAKE_HOST_SOCKET,
+        cap_drop_all=False,
+    )
     params = _translate(spec, tmp_path)
     assert "--cap-drop" not in params.args  # type: ignore[union-attr]
 
@@ -328,7 +370,14 @@ def test_dockercontracttranslator_hardening_no_new_privileges_absent_when_false(
     )
     github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
     backend = AnthropicBackend(secret_name="claude-key", source=source)
-    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), no_new_privileges=False)
+    spec = ContractSpec(
+        github=github,
+        backend=backend,
+        image="img",
+        tmpfs=TmpfsSizes(),
+        proxy_socket_host_path=_FAKE_HOST_SOCKET,
+        no_new_privileges=False,
+    )
     params = _translate(spec, tmp_path)
     assert "no-new-privileges" not in params.args  # type: ignore[union-attr]
 
@@ -341,7 +390,14 @@ def test_dockercontracttranslator_hardening_read_only_absent_when_false(tmp_path
     )
     github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
     backend = AnthropicBackend(secret_name="claude-key", source=source)
-    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), read_only=False)
+    spec = ContractSpec(
+        github=github,
+        backend=backend,
+        image="img",
+        tmpfs=TmpfsSizes(),
+        proxy_socket_host_path=_FAKE_HOST_SOCKET,
+        read_only=False,
+    )
     params = _translate(spec, tmp_path)
     assert "--read-only" not in params.args  # type: ignore[union-attr]
 
@@ -354,7 +410,14 @@ def test_dockercontracttranslator_hardening_network_none_absent_when_false(tmp_p
     )
     github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
     backend = AnthropicBackend(secret_name="claude-key", source=source)
-    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), network_none=False)
+    spec = ContractSpec(
+        github=github,
+        backend=backend,
+        image="img",
+        tmpfs=TmpfsSizes(),
+        proxy_socket_host_path=_FAKE_HOST_SOCKET,
+        network_none=False,
+    )
     params = _translate(spec, tmp_path)
     assert "--network" not in params.args  # type: ignore[union-attr]
 
@@ -375,7 +438,9 @@ def test_dockercontracttranslator_issue_id_in_args_when_set(tmp_path: Path) -> N
 
     github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
     backend = AnthropicBackend(secret_name="claude-key", source=source)
-    spec = ContractSpec(github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), issue_id=42)
+    spec = ContractSpec(
+        github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), proxy_socket_host_path=_FAKE_HOST_SOCKET, issue_id=42
+    )
     params = _translate(spec, tmp_path)
     assert "ISSUE_ID=42" in params.args  # type: ignore[union-attr]
 
@@ -440,3 +505,89 @@ def test_detect_tz_raises_when_localtime_is_regular_file(tmp_path: Path, monkeyp
     monkeypatch.setattr("adda_dev.infra.contract._ETC_LOCALTIME", plain_file)
     with pytest.raises(ContractError):
         _detect_tz(tz_file=absent_tz, localtime=plain_file)
+
+
+# ---------------------------------------------------------------------------
+# ContractSpecDraft — from_project + with_session
+# ---------------------------------------------------------------------------
+
+
+def _make_project_and_backend() -> tuple[Project, AnthropicBackend]:
+    from adda_dev.domain.github import GitHub
+    from adda_dev.domain.llm import LlmBackend
+
+    source = FakeSecretSource(
+        {
+            ("adda-dev:github", "gh-token"): "ghp_test",
+            ("adda-dev:anthropic", "claude-key"): "claude_test",
+        }
+    )
+    github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
+    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    project = Project(
+        name="test-proj",
+        github=github,
+        image="ghcr.io/test/adda:latest",
+        backend=LlmBackend.anthropic,
+        tmpfs=TmpfsSizes(),
+    )
+    return project, backend
+
+
+def test_contractspecdraft_from_project_seeds_github() -> None:
+    project, backend = _make_project_and_backend()
+    draft = ContractSpecDraft.from_project(project, backend)
+    assert draft.github is project.github
+
+
+def test_contractspecdraft_from_project_seeds_backend() -> None:
+    project, backend = _make_project_and_backend()
+    draft = ContractSpecDraft.from_project(project, backend)
+    assert draft.backend is backend
+
+
+def test_contractspecdraft_from_project_seeds_image() -> None:
+    project, backend = _make_project_and_backend()
+    draft = ContractSpecDraft.from_project(project, backend)
+    assert draft.image == project.image
+
+
+def test_contractspecdraft_from_project_seeds_tmpfs() -> None:
+    project, backend = _make_project_and_backend()
+    draft = ContractSpecDraft.from_project(project, backend)
+    assert draft.tmpfs == project.tmpfs
+
+
+def test_contractspecdraft_from_project_issue_id_defaults_to_none() -> None:
+    project, backend = _make_project_and_backend()
+    draft = ContractSpecDraft.from_project(project, backend)
+    assert draft.issue_id is None
+
+
+def test_contractspecdraft_from_project_sets_issue_id() -> None:
+    project, backend = _make_project_and_backend()
+    draft = ContractSpecDraft.from_project(project, backend, issue_id=42)
+    assert draft.issue_id == 42
+
+
+def test_contractspecdraft_with_session_returns_contractspec() -> None:
+    project, backend = _make_project_and_backend()
+    draft = ContractSpecDraft.from_project(project, backend)
+    spec = draft.with_session(_FAKE_HOST_SOCKET)
+    assert isinstance(spec, ContractSpec)
+
+
+def test_contractspecdraft_with_session_binds_host_path() -> None:
+    project, backend = _make_project_and_backend()
+    draft = ContractSpecDraft.from_project(project, backend)
+    spec = draft.with_session(_FAKE_HOST_SOCKET)
+    assert spec.proxy_socket_host_path == _FAKE_HOST_SOCKET
+
+
+def test_contractspecdraft_with_session_socket_mount_in_translated_args(tmp_path: Path) -> None:
+    project, backend = _make_project_and_backend()
+    draft = ContractSpecDraft.from_project(project, backend)
+    spec = draft.with_session(_FAKE_HOST_SOCKET)
+    params = _translate(spec, tmp_path)
+    args = params.args  # type: ignore[union-attr]
+    assert any(f"source={_FAKE_HOST_SOCKET}" in a and f"target={PROXY_SOCKET}" in a and "readonly" in a for a in args)

@@ -106,13 +106,12 @@ Source lives under `src/adda_dev/`. The ring structure defined in §2 maps direc
 
 ### Port pattern
 
-Ports are defined in the domain or shared kernel; infrastructure provides the production adapters. Three port families are active:
+Ports are defined in the domain or shared kernel; infrastructure provides the production adapters. Four port families are active:
 
 - **Credential retrieval:** `SecretSource` (`domain/credentials.py`) → `KeyringSecretSource` (`infra/keyring_source.py`)
 - **Aggregate retrieval:** `ProjectRepository` (`domain/project.py`) → `TomlProjectRepository` (`infra/project.py`); `BackendRepository` (`domain/llm.py`) → `LlmConfigBackendRepository` (`infra/llm.py`); `SessionRepository` (`domain/session.py`) → `FsSessionRepository` (`infra/session.py`)
 - **Output delivery:** `Output` Protocol (`common.py`) → `RichOutput` (`infra/output.py`)
-
-The same pattern will apply to future ports for container execution and session display (#59, #60).
+- **Proxy sidecar:** `ProxySidecar` (`domain/proxy.py`) → `EnvoySidecar` (`infra/proxy.py`)
 
 ### Module table
 
@@ -125,11 +124,13 @@ The same pattern will apply to future ports for container execution and session 
 | `domain/llm` | Domain | `LlmBackend` enum, `AnthropicBackend`, `DeepSeekBackend` frozen dataclasses, `BackendRepository` port |
 | `domain/project` | Domain | `Project` domain entity, `ProjectNotFoundError`, `ProjectRepository` port |
 | `domain/session` | Domain | `Session` entity, `SessionNotFoundError`, `SessionRepository` port |
-| `domain/contract` | Domain | `ContractSpec`, `ContractProcessParams`, `ContractTranslator` port, `ContractError`; contract constants (`CONTAINER_UID`, `CONTAINER_GID`, `CONTAINER_USERNAME`, `PROXY_SOCKET`, `PROXY_PORT`, `RUN_TMPFS_SIZE`, `TMPFS_MODE`) |
+| `domain/contract` | Domain | `ContractSpec` (+ required `proxy_socket_host_path`), `ContractSpecDraft` (typestate builder), `ContractProcessParams`, `ContractTranslator` port, `ContractError`; contract constants (`CONTAINER_UID`, `CONTAINER_GID`, `CONTAINER_USERNAME`, `PROXY_SOCKET`, `PROXY_PORT`, `RUN_TMPFS_SIZE`, `TMPFS_MODE`) |
+| `domain/proxy` | Domain | `ProxySidecar` port and `ProxyError` — abstract interface for an egress proxy sidecar |
 | `app/run` | Application | `run_session()` use case: composes project and backend aggregates, retrieves credentials, displays session info |
 | `infra/store` | Infrastructure | XDG-aware storage root resolution (`StorageArea`, `resolve_storage_root`), safe file-name validation, TOML load+write |
 | `infra/session` | Infrastructure | `SessionFileModel` DTO and `FsSessionRepository` — filesystem-backed session lifecycle |
-| `infra/contract` | Infrastructure | `DockerContractTranslator` — translates `ContractSpec` into `ContractProcessParams` via the Docker env-var mechanism |
+| `infra/contract` | Infrastructure | `DockerContractTranslator` — translates `ContractSpec` into `ContractProcessParams` via the Docker env-var mechanism, including the proxy socket bind-mount |
+| `infra/proxy` | Infrastructure | `EnvoySidecar` — renders the bundled `envoy.yaml.template`, starts the Envoy container detached, polls for the Unix socket, and stops+removes on teardown |
 | `infra/keyring_source` | Infrastructure | `KeyringSecretSource` — OS keyring adapter for the `SecretSource` port |
 | `infra/llm` | Infrastructure | LLM config DTOs (`AnthropicConfigModel`, `DeepSeekConfigModel`, `LlmConfig`) and `LlmConfigBackendRepository` |
 | `infra/config` | Infrastructure | Host config DTOs (`AppConfig`, `ProjectDefaults`, `ContainerEngine`) and `load_app_config()` |

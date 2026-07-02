@@ -79,3 +79,11 @@ class ContainerEngine(abc.ABC):
     @abc.abstractmethod
     def inspect(self, runner: ProcessRunner, name: str) -> ProcessHandle:
         """Inspect a container and return its JSON metadata."""
+
+    @abc.abstractmethod
+    def rm(self, runner: ProcessRunner, name: str, force: bool = False) -> ProcessHandle:
+        """Remove a container by name. Pass force=True to remove a running container."""
+
+    @abc.abstractmethod
+    def logs(self, runner: ProcessRunner, name: str) -> ProcessHandle:
+        """Capture a one-shot snapshot of container logs (docker logs)."""

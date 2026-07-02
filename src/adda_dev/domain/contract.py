@@ -4,10 +4,12 @@ Launcher-container contract domain model: spec, translation output, translator p
 
 import abc
 from dataclasses import dataclass
+from pathlib import Path
 
 from ..common import AddaDevError
 from .github import GitHub
 from .llm import AnthropicBackend, DeepSeekBackend
+from .project import Project
 from .tmpfs import TmpfsSizes
 
 # Fixed contract values — import these instead of repeating magic numbers.
@@ -30,6 +32,7 @@ class ContractSpec:
     backend: AnthropicBackend | DeepSeekBackend
     image: str
     tmpfs: TmpfsSizes
+    proxy_socket_host_path: Path
     proxy_socket: str = PROXY_SOCKET
     proxy_port: int = PROXY_PORT
     issue_id: int | None = None
@@ -37,6 +40,56 @@ class ContractSpec:
     no_new_privileges: bool = True
     read_only: bool = True
     network_none: bool = True
+
+
+@dataclass(frozen=True)
+class ContractSpecDraft:
+    """Incomplete contract spec holding all config-side fields; produced by from_project, completed by with_session."""
+
+    github: GitHub
+    backend: AnthropicBackend | DeepSeekBackend
+    image: str
+    tmpfs: TmpfsSizes
+    proxy_socket: str = PROXY_SOCKET
+    proxy_port: int = PROXY_PORT
+    issue_id: int | None = None
+    cap_drop_all: bool = True
+    no_new_privileges: bool = True
+    read_only: bool = True
+    network_none: bool = True
+
+    @classmethod
+    def from_project(
+        cls,
+        project: Project,
+        backend: AnthropicBackend | DeepSeekBackend,
+        issue_id: int | None = None,
+    ) -> ContractSpecDraft:
+        """Seed a draft from a resolved project and its backend."""
+        return cls(
+            github=project.github,
+            backend=backend,
+            image=project.image,
+            tmpfs=project.tmpfs,
+            issue_id=issue_id,
+        )
+
+    def with_session(self, proxy_socket_host_path: Path) -> ContractSpec:
+        """Bind the session-derived proxy socket path and return the complete spec."""
+        return ContractSpec(
+            github=self.github,
+            backend=self.backend,
+            image=self.image,
+            tmpfs=self.tmpfs,
+            proxy_socket_host_path=proxy_socket_host_path,
+            proxy_socket=self.proxy_socket,
+            proxy_port=self.proxy_port,
+            issue_id=self.issue_id,
+            cap_drop_all=self.cap_drop_all,
+            no_new_privileges=self.no_new_privileges,
+            read_only=self.read_only,
+            network_none=self.network_none,
+        )
 
 
 @dataclass(frozen=True)
