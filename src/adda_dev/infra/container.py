@@ -44,18 +44,31 @@ class DockerEngine(ContainerEngine):
     def pull(self, runner: ProcessRunner, image: str) -> ProcessHandle:
         return runner.run([_BIN, "pull", image])
 
+    def _run(
+        self,
+        runner: ProcessRunner,
+        mode: str,
+        image: str,
+        name: str,
+        args: list[str],
+        env: dict[str, str] | None,
+        cmd: list[str] | None,
+        remove: bool,
+    ) -> ProcessHandle:
+        rm = ["--rm"] if remove else []
+        return runner.run([_BIN, "run", mode, *rm, "--name", name, *args, image, *(cmd or [])], env)
+
     def run_it(
         self,
         runner: ProcessRunner,
         image: str,
         name: str,
         args: list[str],
-        env: dict[str, str],
+        env: dict[str, str] | None = None,
         cmd: list[str] | None = None,
         remove: bool = False,
     ) -> ProcessHandle:
-        rm = ["--rm"] if remove else []
-        return runner.run([_BIN, "run", "-it", *rm, "--name", name, *args, image, *(cmd or [])], env)
+        return self._run(runner, "-it", image, name, args, env, cmd, remove)
 
     def run_d(
         self,
@@ -63,12 +76,11 @@ class DockerEngine(ContainerEngine):
         image: str,
         name: str,
         args: list[str],
-        env: dict[str, str],
+        env: dict[str, str] | None = None,
         cmd: list[str] | None = None,
         remove: bool = False,
     ) -> ProcessHandle:
-        rm = ["--rm"] if remove else []
-        return runner.run([_BIN, "run", "-d", *rm, "--name", name, *args, image, *(cmd or [])], env)
+        return self._run(runner, "-d", image, name, args, env, cmd, remove)
 
     def stop(self, runner: ProcessRunner, name: str) -> ProcessHandle:
         return runner.run([_BIN, "stop", name])

@@ -41,7 +41,7 @@ class ContainerEngine(abc.ABC):
         image: str,
         name: str,
         args: list[str],
-        env: dict[str, str],
+        env: dict[str, str] | None = None,
         cmd: list[str] | None = None,
         remove: bool = False,
     ) -> ProcessHandle:
@@ -54,7 +54,7 @@ class ContainerEngine(abc.ABC):
         image: str,
         name: str,
         args: list[str],
-        env: dict[str, str],
+        env: dict[str, str] | None = None,
         cmd: list[str] | None = None,
         remove: bool = False,
     ) -> ProcessHandle:

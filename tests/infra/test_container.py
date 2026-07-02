@@ -193,6 +193,13 @@ def test_dockerengine_run_it_forwards_env(rootless_docker_path: Path) -> None:
     assert rec.last_env == env
 
 
+def test_dockerengine_run_it_env_defaults_to_none(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.run_it(rec, "alpine", "my-container", [])
+    assert rec.last_env is None
+
+
 def test_dockerengine_run_d_argv_basic(rootless_docker_path: Path) -> None:
     engine = DockerEngine()
     rec = _RecordingRunner()
@@ -213,6 +220,13 @@ def test_dockerengine_run_d_forwards_env(rootless_docker_path: Path) -> None:
     env = {"SOME_VAR": "123"}
     engine.run_d(rec, "alpine", "my-container", [], env)
     assert rec.last_env == env
+
+
+def test_dockerengine_run_d_env_defaults_to_none(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.run_d(rec, "alpine", "my-container", [])
+    assert rec.last_env is None
 
 
 def test_dockerengine_stop_argv(rootless_docker_path: Path) -> None:
