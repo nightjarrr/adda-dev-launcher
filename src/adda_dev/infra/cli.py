@@ -6,15 +6,24 @@ import typer
 
 from ..app.run import run_session
 from ..common import AddaDevError
-from .config import load_app_config
-from .contract import BashTranslator
+from ..domain.container import ContainerEngine
+from .config import ContainerEngineChoice, load_app_config
+from .container import DockerEngine
+from .contract import DockerContractTranslator
 from .keyring_source import KeyringSecretSource
 from .llm import LlmConfigBackendRepository
 from .output import RichOutput
+from .process import DefaultRunner
 from .project import TomlProjectRepository
 from .session import DirectSessionManager, FsSessionRepository
 
 app = typer.Typer(no_args_is_help=True)
+
+
+def _make_engine(choice: ContainerEngineChoice) -> ContainerEngine:
+    if choice is ContainerEngineChoice.docker:
+        return DockerEngine()
+    raise AddaDevError(f"Container engine '{choice.value}' is not supported yet; only 'docker' is available.")
 
 
 @app.callback()
@@ -33,10 +42,13 @@ def run(
 
     try:
         config = load_app_config()
+        engine = _make_engine(config.container_engine)
         project_repo = TomlProjectRepository(config.project_defaults, source)
         backend_repo = LlmConfigBackendRepository(config.llm, source)
-        session_manager = DirectSessionManager(FsSessionRepository(), BashTranslator(), output)
-        run_session(project_name, project_repo, backend_repo, session_manager, output, issue_id)
+        session_manager = DirectSessionManager(
+            FsSessionRepository(), DockerContractTranslator(), engine, DefaultRunner(), output
+        )
+        run_session(project_name, project_repo, backend_repo, engine, session_manager, output, issue_id)
     except AddaDevError as exc:
         output.error(exc)
         raise typer.Exit(1)

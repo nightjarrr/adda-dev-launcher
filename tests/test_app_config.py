@@ -1,5 +1,5 @@
 """
-Tests for infra/config.py: ContainerEngine, ProjectDefaults, load_app_config() paths.
+Tests for infra/config.py: ContainerEngineChoice, ProjectDefaults, load_app_config() paths.
 """
 
 from pathlib import Path
@@ -7,20 +7,20 @@ from pathlib import Path
 import pytest
 
 from adda_dev.domain.tmpfs import TmpfsSizes
-from adda_dev.infra.config import DEFAULT_ENVOY_IMAGE, AppConfig, ContainerEngine, ProjectDefaults, load_app_config
+from adda_dev.infra.config import DEFAULT_ENVOY_IMAGE, AppConfig, ContainerEngineChoice, ProjectDefaults, load_app_config
 from adda_dev.infra.store import SchemaValidationError, TomlParseError
 
 DATA_DIR = Path(__file__).parent / "data"
 
 
 # ---------------------------------------------------------------------------
-# ContainerEngine enum
+# ContainerEngineChoice enum
 # ---------------------------------------------------------------------------
 
 
-def test_container_engine_members() -> None:
-    assert ContainerEngine.docker == "docker"
-    assert ContainerEngine.podman == "podman"
+def test_container_engine_choice_members() -> None:
+    assert ContainerEngineChoice.docker == "docker"
+    assert ContainerEngineChoice.podman == "podman"
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ def test_project_defaults_extra_field_rejected() -> None:
 
 def test_app_config_defaults() -> None:
     cfg = AppConfig()
-    assert cfg.container_engine == ContainerEngine.docker
+    assert cfg.container_engine == ContainerEngineChoice.docker
     assert cfg.envoy_image == DEFAULT_ENVOY_IMAGE
     assert cfg.envoy_image == "envoyproxy/envoy:v1.33.14"
     assert cfg.tmux_config_path is None
@@ -75,7 +75,7 @@ def test_app_config_unknown_key_rejected() -> None:
 def test_load_app_config_missing_file_returns_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     cfg = load_app_config()
-    assert cfg.container_engine == ContainerEngine.docker
+    assert cfg.container_engine == ContainerEngineChoice.docker
     assert cfg.envoy_image == DEFAULT_ENVOY_IMAGE
 
 
@@ -93,7 +93,7 @@ def test_load_app_config_valid_file(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     cfg = load_app_config()
-    assert cfg.container_engine == ContainerEngine.podman
+    assert cfg.container_engine == ContainerEngineChoice.podman
     assert cfg.envoy_image == "envoyproxy/envoy:v1.34.0"
     assert cfg.llm.deepseek.secret_name == "ds-key"
 
@@ -101,7 +101,7 @@ def test_load_app_config_valid_file(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_load_app_config_from_static_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(DATA_DIR))
     cfg = load_app_config()
-    assert cfg.container_engine == ContainerEngine.podman
+    assert cfg.container_engine == ContainerEngineChoice.podman
     assert cfg.envoy_image == "envoyproxy/envoy:v1.34.0"
     assert cfg.llm.deepseek.secret_name == "ds-key"
     assert cfg.project_defaults.tmpfs.home == "1g"

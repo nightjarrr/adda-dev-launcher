@@ -5,10 +5,12 @@ Tests for adda_dev.infra.session: DirectWindow and DirectSessionManager.
 from adda_dev.domain.contract import ContractProcessParams, ContractSpec, ContractTranslator
 from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicBackend, LlmBackend
+from adda_dev.domain.process import ProcessHandle
 from adda_dev.domain.project import Project
+from adda_dev.domain.session_manager import Window
 from adda_dev.domain.tmpfs import TmpfsSizes
 from adda_dev.infra.session import DirectSessionManager, DirectWindow
-from tests.conftest import FakeOutput, FakeSecretSource, FakeSessionRepository
+from tests.conftest import FakeContainerEngine, FakeOutput, FakeSecretSource, FakeSessionRepository
 
 
 class _FakeContractTranslator(ContractTranslator):
@@ -19,6 +21,45 @@ class _FakeContractTranslator(ContractTranslator):
 
     def translate(self, spec: ContractSpec) -> ContractProcessParams:
         return ContractProcessParams(args=(self._cmd,), env={})
+
+
+class _FakeProcessHandle(ProcessHandle):
+    def wait(self) -> int:
+        return 0
+
+    def terminate(self) -> None:
+        pass
+
+    def stdout(self) -> str:
+        return ""
+
+    def stderr(self) -> str:
+        return ""
+
+
+class _FakeProcessRunner:
+    def run(self, cmd: list[str], env: dict | None = None) -> ProcessHandle:
+        return _FakeProcessHandle()
+
+
+class _FakeWindow(Window):
+    """Window test double that records calls without running real processes."""
+
+    def open(self, cmd: list[str], env: dict[str, str] | None = None) -> None:
+        pass
+
+    def attach(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeWindowManager(DirectSessionManager):
+    """DirectSessionManager that creates FakeWindows to avoid real subprocess execution."""
+
+    def create_window(self, name: str) -> Window:
+        return _FakeWindow(name)
 
 
 def _make_spec() -> ContractSpec:
@@ -40,26 +81,37 @@ def _make_spec() -> ContractSpec:
     return ContractSpec(github=project.github, backend=backend, image=project.image, tmpfs=project.tmpfs)
 
 
+def _make_manager(repo: FakeSessionRepository | None = None) -> _FakeWindowManager:
+    repo = repo or FakeSessionRepository()
+    return _FakeWindowManager(repo, _FakeContractTranslator(), FakeContainerEngine(), _FakeProcessRunner(), FakeOutput())  # type: ignore[arg-type]
+
+
 # ---------------------------------------------------------------------------
-# DirectWindow — run and attach
+# DirectWindow — open and attach
 # ---------------------------------------------------------------------------
 
 
-def test_directwindow_run_and_attach_returns_for_true() -> None:
+def test_directwindow_open_and_attach_returns_for_true() -> None:
     window = DirectWindow("test-window")
-    window.run(["true"], {})
+    window.open(["true"], {})
     window.attach()  # must return without blocking or raising
 
 
-def test_directwindow_run_and_attach_returns_for_false() -> None:
+def test_directwindow_open_and_attach_returns_for_false() -> None:
     window = DirectWindow("test-window")
-    window.run(["false"], {})
+    window.open(["false"], {})
     window.attach()  # nonzero exit is ignored — attach must still return
 
 
-def test_directwindow_run_and_attach_returns_for_echo() -> None:
+def test_directwindow_open_and_attach_returns_for_echo() -> None:
     window = DirectWindow("test-window")
-    window.run(["echo", "hello"], {})
+    window.open(["echo", "hello"], {})
+    window.attach()
+
+
+def test_directwindow_open_with_none_env() -> None:
+    window = DirectWindow("test-window")
+    window.open(["true"])  # env defaults to None
     window.attach()
 
 
@@ -70,14 +122,14 @@ def test_directwindow_run_and_attach_returns_for_echo() -> None:
 
 def test_directwindow_close_is_noop() -> None:
     window = DirectWindow("test-window")
-    window.run(["true"], {})
+    window.open(["true"], {})
     window.attach()
     window.close()  # must not raise after attach has returned
 
 
-def test_directwindow_close_without_run_is_noop() -> None:
+def test_directwindow_close_without_open_is_noop() -> None:
     window = DirectWindow("test-window")
-    window.close()  # must not raise even before run() is called
+    window.close()  # must not raise even before open() is called
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +139,7 @@ def test_directwindow_close_without_run_is_noop() -> None:
 
 def test_directsessionmanager_launch_calls_repo_create_with_project_name() -> None:
     repo = FakeSessionRepository()
-    manager = DirectSessionManager(repo, _FakeContractTranslator(), FakeOutput())
+    manager = _make_manager(repo)
     spec = _make_spec()
 
     manager.launch("my-project", spec)
@@ -98,18 +150,18 @@ def test_directsessionmanager_launch_calls_repo_create_with_project_name() -> No
 
 def test_directsessionmanager_launch_returns_session() -> None:
     repo = FakeSessionRepository()
-    manager = DirectSessionManager(repo, _FakeContractTranslator(), FakeOutput())
+    manager = _make_manager(repo)
     spec = _make_spec()
 
     session = manager.launch("my-project", spec)
 
     assert session.project_name == "my-project"
-    assert session.session_id.startswith("session-test-")
+    assert session.session_id.startswith("adda-dev-session-test-")
 
 
 def test_directsessionmanager_launch_returns_session_with_issue_id() -> None:
     repo = FakeSessionRepository()
-    manager = DirectSessionManager(repo, _FakeContractTranslator(), FakeOutput())
+    manager = _make_manager(repo)
     source = FakeSecretSource(
         {
             ("adda-dev:github", "gh-token"): "ghp_test",
@@ -133,7 +185,7 @@ def test_directsessionmanager_launch_returns_session_with_issue_id() -> None:
 
 def test_directsessionmanager_launch_does_not_call_repo_delete() -> None:
     repo = FakeSessionRepository()
-    manager = DirectSessionManager(repo, _FakeContractTranslator(), FakeOutput())
+    manager = _make_manager(repo)
     spec = _make_spec()
 
     manager.launch("my-project", spec)
@@ -148,7 +200,7 @@ def test_directsessionmanager_launch_does_not_call_repo_delete() -> None:
 
 def test_directsessionmanager_terminate_calls_repo_delete() -> None:
     repo = FakeSessionRepository()
-    manager = DirectSessionManager(repo, _FakeContractTranslator(), FakeOutput())
+    manager = _make_manager(repo)
     spec = _make_spec()
 
     session = manager.launch("my-project", spec)
@@ -160,16 +212,16 @@ def test_directsessionmanager_terminate_calls_repo_delete() -> None:
 def test_directsessionmanager_terminate_closes_windows() -> None:
     closed: list[str] = []
 
-    class _TrackingWindow(DirectWindow):
+    class _TrackingWindow(_FakeWindow):
         def close(self) -> None:
             closed.append(self.name)
 
-    class _TrackingManager(DirectSessionManager):
+    class _TrackingManager(_FakeWindowManager):
         def create_window(self, name: str) -> _TrackingWindow:
             return _TrackingWindow(name)
 
     repo = FakeSessionRepository()
-    manager = _TrackingManager(repo, _FakeContractTranslator(), FakeOutput())
+    manager = _TrackingManager(repo, _FakeContractTranslator(), FakeContainerEngine(), _FakeProcessRunner(), FakeOutput())  # type: ignore[arg-type]
     spec = _make_spec()
 
     session = manager.launch("my-project", spec)
