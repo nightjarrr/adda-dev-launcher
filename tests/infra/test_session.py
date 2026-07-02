@@ -44,7 +44,7 @@ def test_fssessionrepository_create_session_id_has_session_prefix(tmp_path: Path
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     repo = FsSessionRepository()
     session = repo.create("demo")
-    assert session.session_id.startswith("session-")
+    assert session.session_id.startswith("adda-dev-session-")
 
 
 def test_fssessionrepository_create_started_at_is_utc_aware(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -14,7 +14,7 @@ CONFIG_FILE_NAME = "config.toml"
 DEFAULT_ENVOY_IMAGE = "envoyproxy/envoy:v1.33.14"
 
 
-class ContainerEngine(StrEnum):
+class ContainerEngineChoice(StrEnum):
     """Supported container engines."""
 
     docker = "docker"
@@ -33,7 +33,7 @@ class AppConfig(StrictModel):
     All fields have defaults so a missing config.toml resolves to valid built-in values.
     """
 
-    container_engine: ContainerEngine = ContainerEngine.docker
+    container_engine: ContainerEngineChoice = ContainerEngineChoice.docker
     envoy_image: str = DEFAULT_ENVOY_IMAGE
     tmux_config_path: Path | None = None
     llm: LlmConfig = LlmConfig()

@@ -3,6 +3,7 @@ run_session use case: start a session and run the primary process.
 """
 
 from ..common import Output
+from ..domain.container import ContainerEngine
 from ..domain.contract import ContractSpec
 from ..domain.llm import BackendRepository
 from ..domain.project import ProjectRepository
@@ -13,6 +14,7 @@ def run_session(
     project_name: str,
     project_repo: ProjectRepository,
     backend_repo: BackendRepository,
+    engine: ContainerEngine,
     session_manager: SessionManager,
     output: Output,
     issue_id: int | None = None,
@@ -23,6 +25,11 @@ def run_session(
     output.info(f"Project:  {project.name}")
     output.info(f"Image:    {project.image}")
     output.info(f"Backend:  {project.backend.value}")
+    output.info(f"Engine:   {engine.name} {engine.version} ({'rootless' if engine.rootless else 'root'})")
+    if not engine.rootless:
+        output.warning(
+            "Running under root Docker; a container escape would hold host-root privileges — rootless Docker is recommended."
+        )
     spec = ContractSpec(
         github=project.github,
         backend=backend,

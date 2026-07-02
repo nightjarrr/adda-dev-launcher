@@ -6,8 +6,10 @@ import shutil
 import uuid
 from datetime import UTC, datetime
 
-from ..common import StrictModel
-from ..domain.process import ProcessHandle
+from ..common import Output, StrictModel
+from ..domain.container import ContainerEngine
+from ..domain.contract import ContractTranslator
+from ..domain.process import ProcessHandle, ProcessRunner
 from ..domain.session import Session, SessionRepository
 from ..domain.session_manager import SessionManager, Window
 from .process import DefaultRunner
@@ -30,7 +32,7 @@ class FsSessionRepository(SessionRepository):
         self._runtime_base = resolve_storage_root(StorageArea.runtime)
 
     def create(self, project_name: str, issue_id: int | None = None) -> Session:
-        session_id = f"session-{uuid.uuid4().hex[:8]}"
+        session_id = f"adda-dev-session-{uuid.uuid4().hex[:8]}"
         runtime_dir = self._runtime_base / session_id
         runtime_dir.mkdir(parents=True, mode=0o700)
         started_at = datetime.now(UTC)
@@ -62,7 +64,7 @@ class DirectWindow(Window):
         super().__init__(name)
         self._handle: ProcessHandle | None = None
 
-    def run(self, cmd: list[str], env: dict[str, str]) -> None:
+    def open(self, cmd: list[str], env: dict[str, str] | None = None) -> None:
         self._handle = DefaultRunner().run(cmd, env)
 
     def attach(self) -> None:
@@ -75,6 +77,16 @@ class DirectWindow(Window):
 
 class DirectSessionManager(SessionManager):
     """SessionManager that runs commands directly in the current terminal (no tmux)."""
+
+    def __init__(
+        self,
+        session_repo: SessionRepository,
+        translator: ContractTranslator,
+        engine: ContainerEngine,
+        runner: ProcessRunner,
+        output: Output,
+    ) -> None:
+        super().__init__(session_repo, translator, engine, runner, output)
 
     def create_window(self, name: str) -> Window:
         return DirectWindow(name)
