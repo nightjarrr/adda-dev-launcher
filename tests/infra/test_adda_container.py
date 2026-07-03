@@ -245,3 +245,26 @@ def test_addaprimarycontainer_stop_swallows_rm_exception() -> None:
     impl = AddaPrimaryContainerImpl(_RaisingRmEngine(), _FixedTranslator())
     impl._name = _TEST_SESSION_ID  # set name directly to skip start()
     impl.stop()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# AddaPrimaryContainerImpl — cmd_override
+# ---------------------------------------------------------------------------
+
+
+def test_addaprimarycontainer_cmd_override_forwarded_to_run_it() -> None:
+    engine = FakeContainerEngine()
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), cmd_override=("echo", "hi"))
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
+    run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
+    _image, _name, _args, _env, cmd, _remove = run_it_calls[0][1]  # type: ignore[misc]
+    assert cmd == ["echo", "hi"]
+
+
+def test_addaprimarycontainer_cmd_default_is_none_in_run_it() -> None:
+    engine = FakeContainerEngine()
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator())
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
+    run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
+    _image, _name, _args, _env, cmd, _remove = run_it_calls[0][1]  # type: ignore[misc]
+    assert cmd is None
