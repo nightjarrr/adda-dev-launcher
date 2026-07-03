@@ -10,7 +10,7 @@ import pytest
 
 from adda_dev.domain.container import ContainerEngineUnavailableError
 from adda_dev.domain.process import ProcessHandle, ProcessRunner
-from adda_dev.domain.session_manager import Window, WindowedRunner, _WindowHandle
+from adda_dev.domain.window import Window, WindowedRunner, _WindowHandle
 from adda_dev.infra.container import DockerEngine
 
 # ---------------------------------------------------------------------------
