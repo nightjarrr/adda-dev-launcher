@@ -10,7 +10,6 @@ from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
 from tests.conftest import (
     FakeBackendRepository,
-    FakeContainerEngine,
     FakeOutput,
     FakeProjectRepository,
     FakeSecretSource,
@@ -54,10 +53,9 @@ def test_run_session_output_includes_project_name() -> None:
     project_repo = FakeProjectRepository({"demo": project})
     backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
     session_manager = FakeSessionManager()
-    engine = FakeContainerEngine()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output)
 
     assert any("demo" in msg for msg in output.info_calls)
 
@@ -69,10 +67,9 @@ def test_run_session_output_includes_image() -> None:
     project_repo = FakeProjectRepository({"demo": project})
     backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
     session_manager = FakeSessionManager()
-    engine = FakeContainerEngine()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output)
 
     assert any("ghcr.io" in msg for msg in output.info_calls)
 
@@ -84,78 +81,11 @@ def test_run_session_output_includes_backend() -> None:
     project_repo = FakeProjectRepository({"demo": project})
     backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
     session_manager = FakeSessionManager()
-    engine = FakeContainerEngine()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output)
 
     assert any("anthropic" in msg for msg in output.info_calls)
-
-
-# ---------------------------------------------------------------------------
-# run_session — Engine banner
-# ---------------------------------------------------------------------------
-
-
-def test_run_session_output_includes_engine_info() -> None:
-    source = _make_fake_source()
-    project = _make_project(source)
-    backend = _make_backend(source)
-    project_repo = FakeProjectRepository({"demo": project})
-    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
-    session_manager = FakeSessionManager()
-    engine = FakeContainerEngine(rootless=True, version="27.1.1")
-    output = FakeOutput()
-
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output)
-
-    assert any("docker" in msg and "27.1.1" in msg and "rootless" in msg for msg in output.info_calls)
-
-
-def test_run_session_rootless_engine_no_warning() -> None:
-    source = _make_fake_source()
-    project = _make_project(source)
-    backend = _make_backend(source)
-    project_repo = FakeProjectRepository({"demo": project})
-    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
-    session_manager = FakeSessionManager()
-    engine = FakeContainerEngine(rootless=True)
-    output = FakeOutput()
-
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output)
-
-    assert len(output.warning_calls) == 0
-
-
-def test_run_session_root_engine_emits_warning() -> None:
-    source = _make_fake_source()
-    project = _make_project(source)
-    backend = _make_backend(source)
-    project_repo = FakeProjectRepository({"demo": project})
-    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
-    session_manager = FakeSessionManager()
-    engine = FakeContainerEngine(rootless=False)
-    output = FakeOutput()
-
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output)
-
-    assert len(output.warning_calls) == 1
-    assert "root" in output.warning_calls[0].lower() or "rootless" in output.warning_calls[0].lower()
-
-
-def test_run_session_output_includes_root_in_engine_banner_when_not_rootless() -> None:
-    source = _make_fake_source()
-    project = _make_project(source)
-    backend = _make_backend(source)
-    project_repo = FakeProjectRepository({"demo": project})
-    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
-    session_manager = FakeSessionManager()
-    engine = FakeContainerEngine(rootless=False, version="27.1.1")
-    output = FakeOutput()
-
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output)
-
-    assert any("docker" in msg and "27.1.1" in msg and "root" in msg for msg in output.info_calls)
 
 
 # ---------------------------------------------------------------------------
@@ -170,10 +100,9 @@ def test_run_session_calls_run_with_draft() -> None:
     project_repo = FakeProjectRepository({"demo": project})
     backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
     session_manager = FakeSessionManager()
-    engine = FakeContainerEngine()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output)
 
     assert len(session_manager.launched) == 1
     assert session_manager.launched[0][0] == "demo"
@@ -187,10 +116,9 @@ def test_run_session_calls_terminate_after_launch() -> None:
     project_repo = FakeProjectRepository({"demo": project})
     backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
     session_manager = FakeSessionManager()
-    engine = FakeContainerEngine()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output)
 
     assert session_manager.terminated == 1
 
@@ -202,10 +130,9 @@ def test_run_session_launch_passes_issue_id_in_draft() -> None:
     project_repo = FakeProjectRepository({"demo": project})
     backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
     session_manager = FakeSessionManager()
-    engine = FakeContainerEngine()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, engine, session_manager, output, issue_id=42)
+    run_session("demo", project_repo, backend_repo, session_manager, output, issue_id=42)
 
     assert session_manager.launched[0][1].issue_id == 42
 
@@ -221,8 +148,7 @@ def test_run_session_propagates_project_not_found() -> None:
     project_repo = FakeProjectRepository({})
     backend_repo = FakeBackendRepository({})
     session_manager = FakeSessionManager()
-    engine = FakeContainerEngine()
     output = FakeOutput()
 
     with pytest.raises(ProjectNotFoundError):
-        run_session("missing", project_repo, backend_repo, engine, session_manager, output)
+        run_session("missing", project_repo, backend_repo, session_manager, output)

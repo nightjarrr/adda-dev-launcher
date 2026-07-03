@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from adda_dev.domain.container import ContainerEngineUnavailableError
 from adda_dev.domain.credentials import SecretSource
 from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicBackend, LlmBackend
@@ -12,6 +11,7 @@ from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
 from adda_dev.infra.cli import app
 from adda_dev.infra.config import ContainerEngineChoice
+from adda_dev.infra.container import ContainerEngineUnavailableError
 from adda_dev.infra.llm import LlmConfig
 from tests.conftest import FakeContainerEngine, FakeSecretSource
 
@@ -72,7 +72,7 @@ def test_run_displays_project_info_and_exits_0() -> None:
 
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
-        patch("adda_dev.infra.cli.DockerEngine", return_value=fake_engine),
+        patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
         patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
         patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
@@ -102,7 +102,7 @@ def test_run_project_not_found_exits_1() -> None:
 
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
-        patch("adda_dev.infra.cli.DockerEngine", return_value=fake_engine),
+        patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
         patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=MagicMock()),
         patch("adda_dev.infra.cli.DirectSessionManager", return_value=MagicMock()),
@@ -139,7 +139,7 @@ def test_run_with_issue_option_exits_0() -> None:
 
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
-        patch("adda_dev.infra.cli.DockerEngine", return_value=fake_engine),
+        patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
         patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
         patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
@@ -165,7 +165,7 @@ def test_run_podman_engine_exits_1_with_not_supported() -> None:
 
 
 # ---------------------------------------------------------------------------
-# run — DockerEngine raises ContainerEngineUnavailableError → exit 1
+# run — create_engine raises ContainerEngineUnavailableError → exit 1
 # ---------------------------------------------------------------------------
 
 
@@ -174,7 +174,7 @@ def test_run_docker_engine_unavailable_exits_1() -> None:
 
     with (
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
-        patch("adda_dev.infra.cli.DockerEngine", side_effect=ContainerEngineUnavailableError("Docker not found")),
+        patch("adda_dev.infra.cli.create_engine", side_effect=ContainerEngineUnavailableError("Docker not found")),
     ):
         result = runner.invoke(app, ["run", "demo"])
 

@@ -6,16 +6,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from adda_dev.domain.adda_container import AddaPrimaryContainer
-from adda_dev.domain.container import ContainerEngine
 from adda_dev.domain.contract import ContractSpec, ContractSpecDraft
 from adda_dev.domain.credentials import SecretError, SecretSource
 from adda_dev.domain.llm import AnthropicBackend, BackendRepository, DeepSeekBackend, LlmBackend
-from adda_dev.domain.process import ProcessHandle, ProcessRunner
 from adda_dev.domain.project import Project, ProjectNotFoundError, ProjectRepository
 from adda_dev.domain.proxy import ProxySidecar
 from adda_dev.domain.session import Session, SessionRepository
 from adda_dev.domain.session_manager import SessionManager
 from adda_dev.domain.window import Window
+from adda_dev.infra.container import ContainerEngine
+from adda_dev.infra.process import ProcessHandle, ProcessRunner
 
 
 class FakeSecretSource(SecretSource):

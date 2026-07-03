@@ -50,7 +50,7 @@ Two rules govern the design. First, aggregates reference other aggregates by **i
 
 **Application Services** (`app/`) — use-case orchestration: the sequence of domain operations that constitutes a launcher session. Imports domain; never imports infrastructure. This ring holds the *algorithm* of the launcher, decoupled from how it is invoked and how domain objects are assembled.
 
-**Infrastructure** (`infra/`) — everything that touches the outside world: TOML I/O, the OS keyring adapter, the CLI entry point, and the composition root that assembles the system from its parts. Imports any inner ring; nothing inner imports it.
+**Infrastructure** (`infra/`) — everything that touches the outside world: TOML I/O, the OS keyring adapter, the CLI entry point, and the composition root that assembles the system from its parts. Imports any inner ring; nothing inner imports it. Technical mechanism (container engine, subprocess execution) also lives here, with its own internal port/adapter split to enable future swaps (e.g., Docker↔Podman) — these infra-internal ports are never named by an inner ring.
 
 ---
 
@@ -106,13 +106,20 @@ Source lives under `src/adda_dev/`. The ring structure defined in §2 maps direc
 
 ### Port pattern
 
-Ports are defined in the domain or shared kernel; infrastructure provides the production adapters. Four port families are active:
+Two distinct kinds of ports appear in this codebase:
+
+**Domain-defined ports** — the SPI the domain owns. The domain defines the contract; infrastructure satisfies it. No inner ring knows the adapter:
 
 - **Credential retrieval:** `SecretSource` (`domain/credentials.py`) → `KeyringSecretSource` (`infra/keyring_source.py`)
 - **Aggregate retrieval:** `ProjectRepository` (`domain/project.py`) → `TomlProjectRepository` (`infra/project.py`); `BackendRepository` (`domain/llm.py`) → `LlmConfigBackendRepository` (`infra/llm.py`); `SessionRepository` (`domain/session.py`) → `FsSessionRepository` (`infra/session.py`)
 - **Output delivery:** `Output` Protocol (`common.py`) → `RichOutput` (`infra/output.py`)
 - **Proxy sidecar:** `ProxySidecar` (`domain/proxy.py`) → `EnvoySidecar` (`infra/proxy.py`)
 - **Primary container lifecycle:** `AddaPrimaryContainer` (`domain/adda_container.py`) → `AddaPrimaryContainerImpl` (`infra/adda_container.py`)
+
+**Infra-internal ports** — technical mechanism abstracted within `infra/` to enable adapter swaps (e.g., Docker↔Podman) without touching inner rings. Inner rings never name these ports:
+
+- **Container engine:** `ContainerEngine` (`infra/container.py`) → `DockerEngine` (`infra/container.py`); `create_engine()` factory builds the engine and emits the startup banner + rootless warning
+- **Subprocess execution:** `ProcessRunner`/`ProcessHandle` (`infra/process.py`) → `DefaultRunner`, `CapturedOutputRunner` (`infra/process.py`)
 
 ### Module table
 
@@ -127,17 +134,20 @@ Ports are defined in the domain or shared kernel; infrastructure provides the pr
 | `domain/session` | Domain | `Session` entity, `SessionNotFoundError`, `SessionRepository` port |
 | `domain/contract` | Domain | `ContractSpec` (+ required `proxy_socket_host_path`), `ContractSpecDraft` (typestate builder: `initialize` seeds from a project, `finalize` binds the session socket and returns a `ContractSpec`), `ContractProcessParams`, `ContractTranslator` port, `ContractError`; contract constants (`CONTAINER_UID`, `CONTAINER_GID`, `CONTAINER_USERNAME`, `PROXY_SOCKET`, `PROXY_PORT`, `RUN_TMPFS_SIZE`, `TMPFS_MODE`) |
 | `domain/proxy` | Domain | `ProxySidecar` port and `ProxyError` — abstract interface for an egress proxy sidecar |
-| `domain/window` | Domain | `Window` ABC (one pane/process), `WindowedRunner` bridge (adapts `Window` to `ProcessRunner`) |
+| `domain/window` | Domain | `Window` ABC — abstract window within a session that owns the process lifecycle for one pane |
 | `domain/adda_container` | Domain | `AddaPrimaryContainer` port — abstract interface for the primary ADDA container lifecycle (`start` takes a `Window`; guarded `stop`) |
 | `app/run` | Application | `run_session()` use case: composes project and backend aggregates, retrieves credentials, displays session info |
 | `infra/store` | Infrastructure | XDG-aware storage root resolution (`StorageArea`, `resolve_storage_root`), safe file-name validation, TOML load+write |
 | `infra/session` | Infrastructure | `SessionFileModel` DTO and `FsSessionRepository` — filesystem-backed session lifecycle |
 | `infra/contract` | Infrastructure | `DockerContractTranslator` — translates `ContractSpec` into `ContractProcessParams` via the Docker env-var mechanism, including the proxy socket bind-mount |
+| `infra/process` | Infrastructure | `ProcessError`, `ProcessHandle`/`ProcessRunner` infra-internal ports, `DefaultRunner`/`CapturedOutputRunner` subprocess adapters |
+| `infra/window` | Infrastructure | `WindowedRunner` + `_WindowHandle` — adapts a domain `Window` to the `ProcessRunner` port so the engine can run into a session pane |
+| `infra/container` | Infrastructure | `ContainerEngine` infra-internal port + `ContainerEngineUnavailableError`, `DockerEngine` adapter, `create_engine()` factory that builds the engine and emits the startup banner + rootless warning |
 | `infra/proxy` | Infrastructure | `EnvoySidecar` — renders the bundled `envoy.yaml.template`, starts the Envoy container detached, polls for the Unix socket, and stops+removes on teardown |
 | `infra/adda_container` | Infrastructure | `AddaPrimaryContainerImpl` — translates spec, pulls image, wraps `Window` in `WindowedRunner`, runs primary ADDA container interactively, and provides guarded stop+rm teardown |
 | `infra/keyring_source` | Infrastructure | `KeyringSecretSource` — OS keyring adapter for the `SecretSource` port |
 | `infra/llm` | Infrastructure | LLM config DTOs (`AnthropicConfigModel`, `DeepSeekConfigModel`, `LlmConfig`) and `LlmConfigBackendRepository` |
-| `infra/config` | Infrastructure | Host config DTOs (`AppConfig`, `ProjectDefaults`, `ContainerEngine`) and `load_app_config()` |
+| `infra/config` | Infrastructure | Host config DTOs (`AppConfig`, `ProjectDefaults`, `ContainerEngineChoice`) and `load_app_config()` |
 | `infra/project` | Infrastructure | Project file DTOs (`ProjectFileModel`, `GitHubFileModel`) and `TomlProjectRepository` |
 | `infra/output` | Infrastructure | `RichOutput` — Rich terminal adapter for the `Output` port |
 | `infra/cli` | Infrastructure | Typer entry point and composition root |

@@ -6,10 +6,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from adda_dev.domain.contract import ContractProcessParams, ContractSpec, ContractTranslator
-from adda_dev.domain.process import ProcessHandle, ProcessRunner
 from adda_dev.domain.session import Session
-from adda_dev.domain.window import Window, WindowedRunner
+from adda_dev.domain.window import Window
 from adda_dev.infra.adda_container import AddaPrimaryContainerImpl
+from adda_dev.infra.process import ProcessHandle, ProcessRunner
+from adda_dev.infra.window import WindowedRunner
 from tests.conftest import FakeContainerEngine
 
 _TEST_SESSION_ID = "adda-dev-session-test1234"

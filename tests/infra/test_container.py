@@ -1,5 +1,5 @@
 """
-Tests for adda_dev.infra.container: DockerEngine, and domain/session_manager: WindowedRunner/_WindowHandle.
+Tests for adda_dev.infra.container: DockerEngine and create_engine().
 """
 
 import os
@@ -8,10 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from adda_dev.domain.container import ContainerEngineUnavailableError
-from adda_dev.domain.process import ProcessHandle, ProcessRunner
-from adda_dev.domain.window import Window, WindowedRunner, _WindowHandle
-from adda_dev.infra.container import DockerEngine
+from adda_dev.common import AddaDevError
+from adda_dev.infra.config import ContainerEngineChoice
+from adda_dev.infra.container import ContainerEngine, ContainerEngineUnavailableError, DockerEngine, create_engine
+from adda_dev.infra.process import ProcessHandle, ProcessRunner
+from tests.conftest import FakeOutput
 
 # ---------------------------------------------------------------------------
 # Fake docker binary fixture helpers
@@ -322,68 +323,47 @@ def test_dockerengine_logs_argv(rootless_docker_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# WindowedRunner + _WindowHandle adapter
+# create_engine — factory behaviour
 # ---------------------------------------------------------------------------
 
 
-class _FakeWindow(Window):
-    """Window test double that records open/attach/close calls."""
-
-    def __init__(self, name: str) -> None:
-        super().__init__(name)
-        self.open_calls: list[tuple[list[str], dict[str, str] | None]] = []
-        self.attached: int = 0
-        self.closed: int = 0
-
-    def open(self, cmd: list[str], env: dict[str, str] | None = None) -> None:
-        self.open_calls.append((cmd, env))
-
-    def attach(self) -> None:
-        self.attached += 1
-
-    def close(self) -> None:
-        self.closed += 1
+def test_create_engine_docker_returns_container_engine(rootless_docker_path: Path) -> None:
+    output = FakeOutput()
+    engine = create_engine(ContainerEngineChoice.docker, output)
+    assert isinstance(engine, ContainerEngine)
 
 
-def test_windowedrunner_run_calls_window_open() -> None:
-    window = _FakeWindow("test")
-    runner = WindowedRunner(window)
-    runner.run(["docker", "run"], {"ENV": "val"})
-    assert len(window.open_calls) == 1
-    assert window.open_calls[0] == (["docker", "run"], {"ENV": "val"})
+def test_create_engine_docker_emits_banner_with_name_and_version(rootless_docker_path: Path) -> None:
+    output = FakeOutput()
+    create_engine(ContainerEngineChoice.docker, output)
+    assert any("docker" in msg and "27.1.1" in msg for msg in output.info_calls)
 
 
-def test_windowedrunner_run_returns_window_handle() -> None:
-    window = _FakeWindow("test")
-    runner = WindowedRunner(window)
-    handle = runner.run(["true"])
-    assert isinstance(handle, _WindowHandle)
+def test_create_engine_rootless_docker_banner_contains_rootless(rootless_docker_path: Path) -> None:
+    output = FakeOutput()
+    create_engine(ContainerEngineChoice.docker, output)
+    assert any("rootless" in msg for msg in output.info_calls)
 
 
-def test_windowhandle_wait_calls_attach_and_returns_0() -> None:
-    window = _FakeWindow("test")
-    handle = _WindowHandle(window)
-    result = handle.wait()
-    assert result == 0
-    assert window.attached == 1
+def test_create_engine_rootless_docker_emits_no_warning(rootless_docker_path: Path) -> None:
+    output = FakeOutput()
+    create_engine(ContainerEngineChoice.docker, output)
+    assert len(output.warning_calls) == 0
 
 
-def test_windowhandle_terminate_calls_close() -> None:
-    window = _FakeWindow("test")
-    handle = _WindowHandle(window)
-    handle.terminate()
-    assert window.closed == 1
+def test_create_engine_rootful_docker_emits_one_warning(rootful_docker_path: Path) -> None:
+    output = FakeOutput()
+    create_engine(ContainerEngineChoice.docker, output)
+    assert len(output.warning_calls) == 1
 
 
-def test_windowhandle_stdout_raises() -> None:
-    window = _FakeWindow("test")
-    handle = _WindowHandle(window)
-    with pytest.raises(RuntimeError):
-        handle.stdout()
+def test_create_engine_rootful_docker_warning_mentions_rootless(rootful_docker_path: Path) -> None:
+    output = FakeOutput()
+    create_engine(ContainerEngineChoice.docker, output)
+    assert "rootless" in output.warning_calls[0]
 
 
-def test_windowhandle_stderr_raises() -> None:
-    window = _FakeWindow("test")
-    handle = _WindowHandle(window)
-    with pytest.raises(RuntimeError):
-        handle.stderr()
+def test_create_engine_podman_raises_adda_dev_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    output = FakeOutput()
+    with pytest.raises(AddaDevError, match="not supported"):
+        create_engine(ContainerEngineChoice.podman, output)
