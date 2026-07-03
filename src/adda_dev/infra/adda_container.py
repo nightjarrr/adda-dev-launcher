@@ -3,11 +3,12 @@ AddaPrimaryContainerImpl adapter: pulls and runs the primary ADDA container, wit
 """
 
 from ..domain.adda_container import AddaPrimaryContainer
-from ..domain.container import ContainerEngine
 from ..domain.contract import ContractSpec, ContractTranslator
 from ..domain.session import Session
-from ..domain.window import Window, WindowedRunner
+from ..domain.window import Window
+from .container import ContainerEngine
 from .process import CapturedOutputRunner, DefaultRunner
+from .window import WindowedRunner
 
 
 class AddaPrimaryContainerImpl(AddaPrimaryContainer):

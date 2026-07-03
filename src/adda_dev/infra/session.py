@@ -7,11 +7,10 @@ import uuid
 from datetime import UTC, datetime
 
 from ..common import StrictModel
-from ..domain.process import ProcessHandle
 from ..domain.session import Session, SessionRepository
 from ..domain.session_manager import SessionManager
 from ..domain.window import Window
-from .process import DefaultRunner
+from .process import DefaultRunner, ProcessHandle
 from .store import StorageArea, resolve_storage_root, write_toml
 
 

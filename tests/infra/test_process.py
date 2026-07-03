@@ -4,8 +4,7 @@ Tests for adda_dev.infra.process: DefaultRunner and CapturedOutputRunner.
 
 import pytest
 
-from adda_dev.domain.process import ProcessError, ProcessHandle
-from adda_dev.infra.process import CapturedOutputRunner, DefaultRunner
+from adda_dev.infra.process import CapturedOutputRunner, DefaultRunner, ProcessError, ProcessHandle
 
 # ---------------------------------------------------------------------------
 # DefaultRunner / _DefaultHandle

@@ -7,10 +7,10 @@ import pytest
 from adda_dev.domain.contract import ContractSpec, ContractSpecDraft
 from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicBackend, LlmBackend
-from adda_dev.domain.process import ProcessHandle
 from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
 from adda_dev.domain.window import Window
+from adda_dev.infra.process import ProcessHandle
 from adda_dev.infra.session import DirectSessionManager, DirectWindow
 from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSecretSource, FakeSessionRepository
 

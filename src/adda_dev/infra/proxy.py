@@ -10,9 +10,9 @@ from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
 from ..common import Output
-from ..domain.container import ContainerEngine
 from ..domain.proxy import ProxyError, ProxySidecar
 from ..domain.session import Session
+from .container import ContainerEngine
 from .process import CapturedOutputRunner
 
 # Single source of truth for the Envoy-internal socket path.
