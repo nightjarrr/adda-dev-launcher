@@ -150,37 +150,15 @@ Two distinct kinds of ports appear in this codebase:
 - **Container engine:** `ContainerEngine` (`infra/container.py`) → `DockerEngine` (`infra/container.py`); `create_engine()` factory builds the engine and emits the startup banner + rootless warning
 - **Subprocess execution:** `ProcessRunner`/`ProcessHandle` (`infra/process.py`) → `DefaultRunner`, `CapturedOutputRunner` (`infra/process.py`)
 
-### Module table
+### Package structure
 
-| Module | Ring | Concern |
-|---|---|---|
-| `common` | Shared kernel | `AddaDevError` root exception and `StrictModel` Pydantic base |
-| `domain/tmpfs` | Domain | tmpfs sizing value objects and their override merge |
-| `domain/credentials` | Domain | `SecretSource` port, `Secret` ABC, `SecretError` |
-| `domain/github` | Domain | `GitHub` domain model (credential retrieval via `SecretSource`) |
-| `domain/llm` | Domain | `LlmBackend` enum, `AnthropicBackend`, `DeepSeekBackend` frozen dataclasses, `BackendRepository` port |
-| `domain/project` | Domain | `Project` domain entity, `ProjectNotFoundError`, `ProjectRepository` port |
-| `domain/session` | Domain | `Session` entity, `SessionNotFoundError`, `SessionRepository` port |
-| `domain/contract` | Domain | `ContractSpec` (+ required `proxy_socket_host_path`), `ContractSpecDraft` (typestate builder: `initialize` seeds from a project, `finalize` binds the session socket and returns a `ContractSpec`), `ContractProcessParams`, `ContractTranslator` port, `ContractError`; contract constants (`CONTAINER_UID`, `CONTAINER_GID`, `CONTAINER_USERNAME`, `PROXY_SOCKET`, `PROXY_PORT`) |
-| `domain/proxy` | Domain | `ProxySidecar` port and `ProxyError` — abstract interface for an egress proxy sidecar |
-| `domain/window` | Domain | `Window` ABC — abstract window within a session that owns the process lifecycle for one pane |
-| `domain/adda_container` | Domain | `AddaPrimaryContainer` port — abstract interface for the primary ADDA container lifecycle (`start` takes a `Window`; guarded `stop`) |
-| `domain/session_manager` | Domain | `SessionManager` base class — domain port encoding the mode-independent session lifecycle algorithm; `create_window()` and two hooks (`_open_secondary_windows`, `_teardown`) are the extension points for execution-mode subclasses |
-| `app/run` | Application | `run_session()` use case: loads project and backend aggregates, displays session info, delegates session execution to `SessionManager` |
-| `infra/store` | Infrastructure | XDG-aware storage root resolution (`StorageArea`, `resolve_storage_root`), safe file-name validation, TOML load+write |
-| `infra/session` | Infrastructure | `SessionFileModel` DTO, `FsSessionRepository` (filesystem-backed session persistence), `DirectWindow` (Window implementation for direct terminal — inherited stdio, no multiplexer), `DirectSessionManager` (SessionManager implementation for Direct mode) |
-| `infra/contract` | Infrastructure | `DockerContractTranslator` — translates `ContractSpec` into `ContractProcessParams` via the Docker env-var mechanism, including the proxy socket bind-mount |
-| `infra/process` | Infrastructure | `ProcessError`, `ProcessHandle`/`ProcessRunner` infra-internal ports, `DefaultRunner`/`CapturedOutputRunner` subprocess adapters |
-| `infra/window` | Infrastructure | `WindowedRunner` + `_WindowHandle` — adapts a domain `Window` to the `ProcessRunner` port so the engine can run into a session pane |
-| `infra/container` | Infrastructure | `ContainerEngine` infra-internal port + `ContainerEngineUnavailableError`, `DockerEngine` adapter, `create_engine()` factory that builds the engine and emits the startup banner + rootless warning |
-| `infra/proxy` | Infrastructure | `EnvoySidecar` — renders the bundled `envoy.yaml.template`, starts the Envoy container detached, polls for the Unix socket, and stops+removes on teardown |
-| `infra/adda_container` | Infrastructure | `AddaPrimaryContainerImpl` — translates spec, pulls image, wraps `Window` in `WindowedRunner`, runs primary ADDA container interactively, and provides guarded stop+rm teardown |
-| `infra/keyring_source` | Infrastructure | `KeyringSecretSource` — OS keyring adapter for the `SecretSource` port |
-| `infra/llm` | Infrastructure | LLM config DTOs (`AnthropicConfigModel`, `DeepSeekConfigModel`, `LlmConfig`) and `LlmConfigBackendRepository` |
-| `infra/config` | Infrastructure | Host config DTOs (`AppConfig`, `ProjectDefaults`, `ContainerEngineChoice`) and `load_app_config()` |
-| `infra/project` | Infrastructure | Project file DTOs (`ProjectFileModel`, `GitHubFileModel`) and `TomlProjectRepository` |
-| `infra/output` | Infrastructure | `RichOutput` — Rich terminal adapter for the `Output` port |
-| `infra/cli` | Infrastructure | Typer entry point and composition root |
+| Location | Role |
+|---|---|
+| `common.py` | Shared kernel — `AddaDevError` root exception and `StrictModel` Pydantic base; importable by any ring |
+| `domain/` | Domain ring — entities, value objects, and all domain ports |
+| `app/` | Application ring — use-case orchestration; imports domain only |
+| `infra/` | Infrastructure ring — all adapters, the CLI entry point, and the composition root |
+| `infra/cli.py` | CLI entry point and composition root; the only place all rings meet |
 
 ---
 
