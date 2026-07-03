@@ -73,7 +73,7 @@ class EnvoySidecar(ProxySidecar):
 
         self._engine.pull(self._runner, self._envoy_image).wait()
 
-        name = f"{session.session_id}_proxy"
+        name = f"{session.session_id}-proxy"
         args = self._build_args(socket_dir, config_path)
         cmd = ["-c", _ENVOY_CONFIG_CONTAINER_PATH]
 

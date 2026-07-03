@@ -246,14 +246,14 @@ def test_envoy_sidecar_start_run_d_uses_envoy_image(tmp_path: Path) -> None:
 
 
 def test_envoy_sidecar_start_run_d_container_name_uses_session_id(tmp_path: Path) -> None:
-    """Container name must be {session_id}_proxy — derived from the session, not the dir name."""
+    """Container name must be {session_id}-proxy — derived from the session, not the dir name."""
     sidecar, engine = _make_exited_sidecar()
     session = _make_session(tmp_path)
     with pytest.raises(ProxyError):
         sidecar.start(session)
     run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
     _, (_image, name, _args, _env, _cmd, _remove) = run_d_calls[0]
-    assert name == f"{session.session_id}_proxy"
+    assert name == f"{session.session_id}-proxy"
 
 
 def test_envoy_sidecar_start_run_d_without_remove(tmp_path: Path) -> None:
