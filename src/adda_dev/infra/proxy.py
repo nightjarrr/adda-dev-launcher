@@ -11,8 +11,8 @@ from pathlib import Path, PurePosixPath
 
 from ..common import Output
 from ..domain.container import ContainerEngine
-from ..domain.process import ProcessRunner
 from ..domain.proxy import ProxyError, ProxySidecar
+from .process import CapturedOutputRunner
 
 # Single source of truth for the Envoy-internal socket path.
 ENVOY_SOCKET_CONTAINER_PATH: str = "/run/adda-dev-proxy/proxy.sock"
@@ -40,7 +40,6 @@ class EnvoySidecar(ProxySidecar):
     def __init__(
         self,
         engine: ContainerEngine,
-        runner: ProcessRunner,
         envoy_image: str,
         output: Output,
         *,
@@ -49,7 +48,7 @@ class EnvoySidecar(ProxySidecar):
         interval: float = _POLL_INTERVAL_S,
     ) -> None:
         self._engine = engine
-        self._runner = runner
+        self._runner = CapturedOutputRunner()
         self._envoy_image = envoy_image
         self._output = output
         self._sleep = sleep
@@ -79,7 +78,7 @@ class EnvoySidecar(ProxySidecar):
 
         handle = self._engine.run_d(self._runner, self._envoy_image, name, args, cmd=cmd, remove=False)
         if handle.wait() != 0:
-            raise ProxyError(f"Envoy container failed to start: {handle.stderr().strip()}")
+            raise ProxyError("Envoy container failed to start", stderr=handle.stderr().strip())
         self._container_name = name
 
         return self._poll_ready(host_socket)
@@ -120,17 +119,19 @@ class EnvoySidecar(ProxySidecar):
 
     def _poll_ready(self, host_socket: Path) -> Path:
         """Poll until the Envoy Unix socket appears, the container exits, or attempts are exhausted."""
+        start = time.monotonic()
         for _ in range(self._attempts):
             if host_socket.is_socket():
-                self._output.info("Envoy proxy ready.")
+                elapsed = time.monotonic() - start
+                self._output.info(f"Envoy proxy ready in {elapsed:.1f}s.")
                 return host_socket
             if self._container_exited():
-                logs = self._capture_logs()
-                raise ProxyError(f"Envoy exited before creating the proxy socket\n{logs}")
+                stdout, stderr = self._capture_logs()
+                raise ProxyError("Envoy exited before creating the proxy socket", stdout=stdout, stderr=stderr)
             self._sleep(self._interval)
 
-        logs = self._capture_logs()
-        raise ProxyError(f"Proxy socket not ready after {self._attempts} attempts\n{logs}")
+        stdout, stderr = self._capture_logs()
+        raise ProxyError(f"Proxy socket not ready after {self._attempts} attempts", stdout=stdout, stderr=stderr)
 
     def _container_exited(self) -> bool:
         """Return True if the Envoy container has stopped running."""
@@ -144,11 +145,11 @@ class EnvoySidecar(ProxySidecar):
         except Exception:  # noqa: BLE001
             return True
 
-    def _capture_logs(self) -> str:
-        """Capture Envoy container logs; return empty string on failure."""
+    def _capture_logs(self) -> tuple[str, str]:
+        """Capture Envoy container logs; return (stdout, stderr), empty strings on failure."""
         try:
             handle = self._engine.logs(self._runner, self._container_name or "")
             handle.wait()
-            return handle.stdout() + handle.stderr()
+            return handle.stdout(), handle.stderr()
         except Exception:  # noqa: BLE001
-            return ""
+            return "", ""

@@ -13,7 +13,7 @@ from .contract import DockerContractTranslator
 from .keyring_source import KeyringSecretSource
 from .llm import LlmConfigBackendRepository
 from .output import RichOutput
-from .process import CapturedOutputRunner, DefaultRunner
+from .process import DefaultRunner
 from .project import TomlProjectRepository
 from .proxy import EnvoySidecar
 from .session import DirectSessionManager, FsSessionRepository
@@ -46,7 +46,7 @@ def run(
         engine = _make_engine(config.container_engine)
         project_repo = TomlProjectRepository(config.project_defaults, source)
         backend_repo = LlmConfigBackendRepository(config.llm, source)
-        sidecar = EnvoySidecar(engine, CapturedOutputRunner(), config.envoy_image, output)
+        sidecar = EnvoySidecar(engine, config.envoy_image, output)
         session_manager = DirectSessionManager(
             FsSessionRepository(), DockerContractTranslator(), engine, DefaultRunner(), output, sidecar
         )

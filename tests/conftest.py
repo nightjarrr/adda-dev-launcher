@@ -225,12 +225,12 @@ class FakeSessionManager(SessionManager):
     def create_window(self, name: str) -> Window:
         return _FakeWindow(name)
 
-    def launch(self, project_name: str, draft: ContractSpecDraft) -> None:
-        super().launch(project_name, draft)
+    def _launch(self, project_name: str, draft: ContractSpecDraft) -> None:
+        super()._launch(project_name, draft)
         self.launched.append((project_name, draft))
 
-    def terminate(self) -> None:
-        super().terminate()
+    def _terminate(self) -> None:
+        super()._terminate()
         self.terminated += 1
 
 

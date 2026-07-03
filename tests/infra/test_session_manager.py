@@ -73,7 +73,7 @@ def _make_draft(issue_id: int | None = None) -> ContractSpecDraft:
         backend=LlmBackend.anthropic,
         tmpfs=TmpfsSizes(),
     )
-    return ContractSpecDraft.from_project(project, backend, issue_id=issue_id)
+    return ContractSpecDraft.initialize(project, backend, issue_id=issue_id)
 
 
 def _make_manager(
@@ -155,7 +155,7 @@ def test_directsessionmanager_launch_calls_repo_create_with_project_name(tmp_pat
         repo = FakeSessionRepository()
         manager = _make_manager(repo)
         draft = _make_draft()
-        manager.launch("my-project", draft)
+        manager._launch("my-project", draft)
         assert any(s.project_name == "my-project" for s in repo._sessions.values())
     finally:
         _mod._ETC_TIMEZONE = original  # type: ignore[attr-defined]
@@ -171,7 +171,7 @@ def test_directsessionmanager_launch_does_not_call_repo_delete(tmp_path: Path) -
     try:
         repo = FakeSessionRepository()
         manager = _make_manager(repo)
-        manager.launch("my-project", _make_draft())
+        manager._launch("my-project", _make_draft())
         assert len(repo.deleted) == 0
     finally:
         _mod._ETC_TIMEZONE = original
@@ -187,7 +187,7 @@ def test_directsessionmanager_launch_with_issue_id_creates_session(tmp_path: Pat
     try:
         repo = FakeSessionRepository()
         manager = _make_manager(repo)
-        manager.launch("my-project", _make_draft(issue_id=42))
+        manager._launch("my-project", _make_draft(issue_id=42))
         sessions = list(repo._sessions.values())
         assert sessions[0].issue_id == 42
     finally:
@@ -209,9 +209,9 @@ def test_directsessionmanager_terminate_calls_repo_delete(tmp_path: Path) -> Non
     try:
         repo = FakeSessionRepository()
         manager = _make_manager(repo)
-        manager.launch("my-project", _make_draft())
+        manager._launch("my-project", _make_draft())
         session_id = list(repo._sessions.keys())[0]
-        manager.terminate()
+        manager._terminate()
         assert session_id in repo.deleted
     finally:
         _mod._ETC_TIMEZONE = original
@@ -244,8 +244,8 @@ def test_directsessionmanager_terminate_closes_windows(tmp_path: Path) -> None:
             FakeOutput(),
             FakeProxySidecar(),
         )
-        manager.launch("my-project", _make_draft())
-        manager.terminate()
+        manager._launch("my-project", _make_draft())
+        manager._terminate()
         assert len(closed) == 1
     finally:
         _mod._ETC_TIMEZONE = original
@@ -261,8 +261,8 @@ def test_directsessionmanager_terminate_stops_sidecar(tmp_path: Path) -> None:
     try:
         sidecar = FakeProxySidecar()
         manager = _make_manager(sidecar=sidecar)
-        manager.launch("my-project", _make_draft())
-        manager.terminate()
+        manager._launch("my-project", _make_draft())
+        manager._terminate()
         assert sidecar.stop_calls == 1
     finally:
         _mod._ETC_TIMEZONE = original
@@ -272,7 +272,7 @@ def test_directsessionmanager_terminate_without_launch_is_safe() -> None:
     """terminate() must be None-safe when called before launch completes."""
     sidecar = FakeProxySidecar()
     manager = _make_manager(sidecar=sidecar)
-    manager.terminate()  # _session is None; must not raise
+    manager._terminate()  # _session is None; must not raise
     assert sidecar.stop_calls == 1
 
 
@@ -282,9 +282,9 @@ def test_directsessionmanager_terminate_without_launch_is_safe() -> None:
 
 
 class _FailingLaunchManager(_FakeWindowManager):
-    """Manager whose launch() always raises after creating a session."""
+    """Manager whose _launch() always raises after creating a session."""
 
-    def launch(self, project_name: str, draft: ContractSpecDraft) -> None:
+    def _launch(self, project_name: str, draft: ContractSpecDraft) -> None:
         # Create the session so _session is set, then raise to simulate partial failure
         self._repo.create(project_name, draft.issue_id)
         raise RuntimeError("simulated launch failure")

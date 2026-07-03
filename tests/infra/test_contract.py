@@ -521,60 +521,60 @@ def _make_project_and_backend() -> tuple[Project, AnthropicBackend]:
     return project, backend
 
 
-def test_contractspecdraft_from_project_seeds_github() -> None:
+def test_contractspecdraft_initialize_seeds_github() -> None:
     project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.from_project(project, backend)
+    draft = ContractSpecDraft.initialize(project, backend)
     assert draft.github is project.github
 
 
-def test_contractspecdraft_from_project_seeds_backend() -> None:
+def test_contractspecdraft_initialize_seeds_backend() -> None:
     project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.from_project(project, backend)
+    draft = ContractSpecDraft.initialize(project, backend)
     assert draft.backend is backend
 
 
-def test_contractspecdraft_from_project_seeds_image() -> None:
+def test_contractspecdraft_initialize_seeds_image() -> None:
     project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.from_project(project, backend)
+    draft = ContractSpecDraft.initialize(project, backend)
     assert draft.image == project.image
 
 
-def test_contractspecdraft_from_project_seeds_tmpfs() -> None:
+def test_contractspecdraft_initialize_seeds_tmpfs() -> None:
     project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.from_project(project, backend)
+    draft = ContractSpecDraft.initialize(project, backend)
     assert draft.tmpfs == project.tmpfs
 
 
-def test_contractspecdraft_from_project_issue_id_defaults_to_none() -> None:
+def test_contractspecdraft_initialize_issue_id_defaults_to_none() -> None:
     project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.from_project(project, backend)
+    draft = ContractSpecDraft.initialize(project, backend)
     assert draft.issue_id is None
 
 
-def test_contractspecdraft_from_project_sets_issue_id() -> None:
+def test_contractspecdraft_initialize_sets_issue_id() -> None:
     project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.from_project(project, backend, issue_id=42)
+    draft = ContractSpecDraft.initialize(project, backend, issue_id=42)
     assert draft.issue_id == 42
 
 
-def test_contractspecdraft_with_session_returns_contractspec() -> None:
+def test_contractspecdraft_finalize_returns_contractspec() -> None:
     project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.from_project(project, backend)
-    spec = draft.with_session(_FAKE_HOST_SOCKET)
+    draft = ContractSpecDraft.initialize(project, backend)
+    spec = draft.finalize(_FAKE_HOST_SOCKET)
     assert isinstance(spec, ContractSpec)
 
 
-def test_contractspecdraft_with_session_binds_host_path() -> None:
+def test_contractspecdraft_finalize_binds_host_path() -> None:
     project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.from_project(project, backend)
-    spec = draft.with_session(_FAKE_HOST_SOCKET)
+    draft = ContractSpecDraft.initialize(project, backend)
+    spec = draft.finalize(_FAKE_HOST_SOCKET)
     assert spec.proxy_socket_host_path == _FAKE_HOST_SOCKET
 
 
-def test_contractspecdraft_with_session_socket_mount_in_translated_args(tmp_path: Path) -> None:
+def test_contractspecdraft_finalize_socket_mount_in_translated_args(tmp_path: Path) -> None:
     project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.from_project(project, backend)
-    spec = draft.with_session(_FAKE_HOST_SOCKET)
+    draft = ContractSpecDraft.initialize(project, backend)
+    spec = draft.finalize(_FAKE_HOST_SOCKET)
     params = _translate(spec, tmp_path)
     args = params.args  # type: ignore[union-attr]
     assert any(f"source={_FAKE_HOST_SOCKET}" in a and f"target={PROXY_SOCKET}" in a and "readonly" in a for a in args)

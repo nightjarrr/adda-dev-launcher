@@ -30,5 +30,5 @@ def run_session(
         output.warning(
             "Running under root Docker; a container escape would hold host-root privileges — rootless Docker is recommended."
         )
-    draft = ContractSpecDraft.from_project(project, backend, issue_id)
+    draft = ContractSpecDraft.initialize(project, backend, issue_id)
     session_manager.run(project_name, draft)

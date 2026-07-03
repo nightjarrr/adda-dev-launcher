@@ -44,7 +44,7 @@ class ContractSpec:
 
 @dataclass(frozen=True)
 class ContractSpecDraft:
-    """Incomplete contract spec holding all config-side fields; produced by from_project, completed by with_session."""
+    """Incomplete contract spec holding all config-side fields; produced by initialize, completed by finalize."""
 
     github: GitHub
     backend: AnthropicBackend | DeepSeekBackend
@@ -59,7 +59,7 @@ class ContractSpecDraft:
     network_none: bool = True
 
     @classmethod
-    def from_project(
+    def initialize(
         cls,
         project: Project,
         backend: AnthropicBackend | DeepSeekBackend,
@@ -74,7 +74,7 @@ class ContractSpecDraft:
             issue_id=issue_id,
         )
 
-    def with_session(self, proxy_socket_host_path: Path) -> ContractSpec:
+    def finalize(self, proxy_socket_host_path: Path) -> ContractSpec:
         """Bind the session-derived proxy socket path and return the complete spec."""
         return ContractSpec(
             github=self.github,

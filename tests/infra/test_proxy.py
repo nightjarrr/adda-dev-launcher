@@ -44,11 +44,6 @@ class _FakeHandle:
         pass
 
 
-class _FakeRunner:
-    def run(self, cmd: list[str], env: dict[str, str] | None = None) -> _FakeHandle:
-        return _FakeHandle()
-
-
 class _ExitedEngine(FakeContainerEngine):
     """Engine that reports the container as not running on inspect."""
 
@@ -90,7 +85,7 @@ class _AlwaysRunningEngine(FakeContainerEngine):
 def _make_exited_sidecar() -> tuple[EnvoySidecar, _ExitedEngine]:
     """Sidecar backed by an engine that always reports exited; fails fast in polling."""
     eng = _ExitedEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     return sidecar, eng
 
 
@@ -99,6 +94,41 @@ def _bind_unix_socket(path: Path) -> socket.socket:
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.bind(str(path))
     return sock
+
+
+# ---------------------------------------------------------------------------
+# ProxyError — structured diagnostics and __str__ rendering
+# ---------------------------------------------------------------------------
+
+
+def test_proxyerror_str_includes_message() -> None:
+    exc = ProxyError("msg", stdout="OUT", stderr="ERR")
+    assert "msg" in str(exc)
+
+
+def test_proxyerror_str_includes_stdout_section() -> None:
+    exc = ProxyError("msg", stdout="OUT", stderr="ERR")
+    assert "--- stdout ---" in str(exc)
+    assert "OUT" in str(exc)
+
+
+def test_proxyerror_str_includes_stderr_section() -> None:
+    exc = ProxyError("msg", stdout="OUT", stderr="ERR")
+    assert "--- stderr ---" in str(exc)
+    assert "ERR" in str(exc)
+
+
+def test_proxyerror_attributes_readable() -> None:
+    exc = ProxyError("msg", stdout="OUT", stderr="ERR")
+    assert exc.stdout == "OUT"
+    assert exc.stderr == "ERR"
+
+
+def test_proxyerror_str_message_only_when_no_streams() -> None:
+    exc = ProxyError("only message")
+    assert str(exc) == "only message"
+    assert "stdout" not in str(exc)
+    assert "stderr" not in str(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +319,7 @@ def test_envoy_sidecar_start_poll_success_returns_host_socket(tmp_path: Path) ->
             return _FakeHandle(rc=0, out=json.dumps(state))
 
     eng = _SocketCreatingEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=5)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=5)
     result = sidecar.start(tmp_path)
     assert result == socket_path
 
@@ -319,7 +349,7 @@ def test_envoy_sidecar_start_poll_success_emits_ready_message(tmp_path: Path) ->
 
     output = FakeOutput()
     eng = _SocketCreatingEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, output, sleep=lambda _: None, attempts=5)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, output, sleep=lambda _: None, attempts=5)
     sidecar.start(tmp_path)
     assert any("ready" in msg.lower() or "envoy" in msg.lower() for msg in output.info_calls)
 
@@ -331,22 +361,22 @@ def test_envoy_sidecar_start_poll_success_emits_ready_message(tmp_path: Path) ->
 
 def test_envoy_sidecar_start_failfast_on_exit_raises_proxy_error(tmp_path: Path) -> None:
     eng = _ExitedEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
     with pytest.raises(ProxyError, match="exited"):
         sidecar.start(tmp_path)
 
 
 def test_envoy_sidecar_start_failfast_captures_logs(tmp_path: Path) -> None:
     eng = _ExitedEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
     with pytest.raises(ProxyError) as exc_info:
         sidecar.start(tmp_path)
-    assert "envoy crashed" in str(exc_info.value)
+    assert exc_info.value.stdout == "envoy crashed"
 
 
 def test_envoy_sidecar_start_failfast_on_inspect_failure(tmp_path: Path) -> None:
     eng = _FailInspectEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
     with pytest.raises(ProxyError):
         sidecar.start(tmp_path)
 
@@ -358,17 +388,17 @@ def test_envoy_sidecar_start_failfast_on_inspect_failure(tmp_path: Path) -> None
 
 def test_envoy_sidecar_start_timeout_raises_proxy_error(tmp_path: Path) -> None:
     eng = _AlwaysRunningEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError, match="not ready"):
         sidecar.start(tmp_path)
 
 
 def test_envoy_sidecar_start_timeout_captures_logs(tmp_path: Path) -> None:
     eng = _AlwaysRunningEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError) as exc_info:
         sidecar.start(tmp_path)
-    assert "still starting" in str(exc_info.value)
+    assert exc_info.value.stdout == "still starting"
 
 
 # ---------------------------------------------------------------------------
@@ -394,7 +424,7 @@ def test_envoy_sidecar_start_run_d_nonzero_exit_raises(tmp_path: Path) -> None:
             return _FakeHandle(rc=1, out="", err="pull failed")
 
     eng = _FailRunDEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError):
         sidecar.start(tmp_path)
     # stop() must be a no-op since _container_name was never set
@@ -409,7 +439,7 @@ def test_envoy_sidecar_start_run_d_nonzero_exit_raises(tmp_path: Path) -> None:
 
 def test_envoy_sidecar_stop_before_start_is_noop() -> None:
     eng = FakeContainerEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     sidecar.stop()  # must not raise; no container name recorded
     assert not any(c[0] in ("stop", "rm") for c in eng.calls)
 
@@ -438,7 +468,7 @@ def test_envoy_sidecar_stop_after_start_calls_stop_and_rm(tmp_path: Path) -> Non
             return _FakeHandle(rc=0, out=json.dumps(state))
 
     eng = _SocketCreatingEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=5)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=5)
     sidecar.start(tmp_path)
     sidecar.stop()
     assert any(c[0] == "stop" for c in eng.calls)
@@ -482,29 +512,25 @@ class _RaisingLogsEngine(_ExitedEngine):
 
 
 def test_envoy_sidecar_stop_swallows_stop_exception() -> None:
-    sidecar = EnvoySidecar(_RaisingStopEngine(), _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None)
+    sidecar = EnvoySidecar(_RaisingStopEngine(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None)
     sidecar._container_name = "test-envoy"
     sidecar.stop()  # must not raise
 
 
 def test_envoy_sidecar_stop_swallows_rm_exception() -> None:
-    sidecar = EnvoySidecar(_RaisingRmEngine(), _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None)
+    sidecar = EnvoySidecar(_RaisingRmEngine(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None)
     sidecar._container_name = "test-envoy"
     sidecar.stop()  # must not raise
 
 
 def test_envoy_sidecar_container_exited_on_inspect_exception(tmp_path: Path) -> None:
-    sidecar = EnvoySidecar(
-        _RaisingInspectEngine(), _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3
-    )
+    sidecar = EnvoySidecar(_RaisingInspectEngine(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError):
         sidecar.start(tmp_path)
 
 
 def test_envoy_sidecar_capture_logs_swallows_exception(tmp_path: Path) -> None:
-    sidecar = EnvoySidecar(
-        _RaisingLogsEngine(), _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3
-    )
+    sidecar = EnvoySidecar(_RaisingLogsEngine(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError):
         sidecar.start(tmp_path)
 
@@ -533,7 +559,7 @@ def test_envoy_sidecar_stop_rm_uses_force(tmp_path: Path) -> None:
             return _FakeHandle(rc=0, out=json.dumps(state))
 
     eng = _SocketCreatingEngine()
-    sidecar = EnvoySidecar(eng, _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=5)
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=5)
     sidecar.start(tmp_path)
     sidecar.stop()
     rm_calls = [c for c in eng.calls if c[0] == "rm"]

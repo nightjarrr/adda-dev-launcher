@@ -2,6 +2,8 @@
 Docker container engine: DockerEngine implements the ContainerEngine port via the docker CLI.
 """
 
+import os
+
 from ..domain.container import ContainerEngine, ContainerEngineUnavailableError
 from ..domain.process import ProcessError, ProcessHandle, ProcessRunner
 from .process import CapturedOutputRunner
@@ -56,7 +58,8 @@ class DockerEngine(ContainerEngine):
         remove: bool,
     ) -> ProcessHandle:
         rm = ["--rm"] if remove else []
-        return runner.run([_BIN, "run", mode, *rm, "--name", name, *args, image, *(cmd or [])], env)
+        merged = {**os.environ, **env} if env is not None else None
+        return runner.run([_BIN, "run", mode, *rm, "--name", name, *args, image, *(cmd or [])], merged)
 
     def run_it(
         self,

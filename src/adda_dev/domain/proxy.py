@@ -11,6 +11,19 @@ from ..common import AddaDevError
 class ProxyError(AddaDevError):
     """Raised when the proxy sidecar fails to start, times out, or exits unexpectedly."""
 
+    def __init__(self, message: str, *, stdout: str | None = None, stderr: str | None = None) -> None:
+        super().__init__(message)
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def __str__(self) -> str:
+        parts = [super().__str__()]
+        if self.stdout:
+            parts.append(f"\n--- stdout ---\n{self.stdout}")
+        if self.stderr:
+            parts.append(f"\n--- stderr ---\n{self.stderr}")
+        return "".join(parts)
+
 
 class ProxySidecar(abc.ABC):
     """Abstract port for starting and stopping an egress proxy sidecar."""

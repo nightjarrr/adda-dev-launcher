@@ -190,7 +190,20 @@ def test_dockerengine_run_it_forwards_env(rootless_docker_path: Path) -> None:
     rec = _RecordingRunner()
     env = {"MY_VAR": "value", "TOKEN": "secret"}
     engine.run_it(rec, "alpine", "my-container", [], env)
-    assert rec.last_env == env
+    # provided keys must be present with their values; host PATH must also be present (overlay)
+    assert rec.last_env is not None
+    assert rec.last_env["MY_VAR"] == "value"
+    assert rec.last_env["TOKEN"] == "secret"
+    assert "PATH" in rec.last_env
+
+
+def test_dockerengine_run_it_env_precedence_over_host(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    env = {"PATH": "/custom/bin"}
+    engine.run_it(rec, "alpine", "my-container", [], env)
+    assert rec.last_env is not None
+    assert rec.last_env["PATH"] == "/custom/bin"
 
 
 def test_dockerengine_run_it_env_defaults_to_none(rootless_docker_path: Path) -> None:
@@ -219,7 +232,10 @@ def test_dockerengine_run_d_forwards_env(rootless_docker_path: Path) -> None:
     rec = _RecordingRunner()
     env = {"SOME_VAR": "123"}
     engine.run_d(rec, "alpine", "my-container", [], env)
-    assert rec.last_env == env
+    # provided keys must be present; host PATH must also be present (overlay)
+    assert rec.last_env is not None
+    assert rec.last_env["SOME_VAR"] == "123"
+    assert "PATH" in rec.last_env
 
 
 def test_dockerengine_run_d_env_defaults_to_none(rootless_docker_path: Path) -> None:

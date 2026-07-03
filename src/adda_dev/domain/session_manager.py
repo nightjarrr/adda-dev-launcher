@@ -3,7 +3,6 @@ SessionManager port and Window ABC: host-side session lifecycle base classes.
 """
 
 import abc
-import os
 
 from ..common import Output
 from ..domain.container import ContainerEngine
@@ -87,27 +86,26 @@ class SessionManager(abc.ABC):
     def run(self, project_name: str, draft: ContractSpecDraft) -> None:
         """Launch a session and guarantee teardown even when launch raises."""
         try:
-            self.launch(project_name, draft)
+            self._launch(project_name, draft)
         finally:
-            self.terminate()
+            self._terminate()
 
-    def launch(self, project_name: str, draft: ContractSpecDraft) -> None:
+    def _launch(self, project_name: str, draft: ContractSpecDraft) -> None:
         """Create a session, start the sidecar, pull and run the main container."""
         session = self._repo.create(project_name, draft.issue_id)
         self._session = session
         host_socket = self._sidecar.start(session.runtime_dir)
-        spec = draft.with_session(host_socket)
+        spec = draft.finalize(host_socket)
         params = self._translator.translate(spec)
-        full_env = {**os.environ, **params.env}
         self._output.info(f"Session:  {session.session_id}")
         self._engine.pull(self._runner, spec.image).wait()
         primary = self.create_window("adda-dev primary")
         self._windows.append(primary)
-        self._engine.run_it(WindowedRunner(primary), spec.image, session.session_id, list(params.args), full_env, remove=True)
+        self._engine.run_it(WindowedRunner(primary), spec.image, session.session_id, list(params.args), params.env, remove=True)
         self._open_secondary_windows(session, spec)
         primary.attach()
 
-    def terminate(self) -> None:
+    def _terminate(self) -> None:
         """Close all tracked windows, run teardown hook, stop sidecar, then delete the session record."""
         for window in self._windows:
             window.close()
