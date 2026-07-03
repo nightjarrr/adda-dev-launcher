@@ -145,7 +145,7 @@ Two distinct kinds of ports appear in this codebase:
 - **Session window:** `Window` (`domain/window.py`) → `DirectWindow` (`infra/session.py`)
 - **Session lifecycle:** `SessionManager` (`domain/session_manager.py`) → `DirectSessionManager` (`infra/session.py`)
 
-**Infra-internal ports** — technical mechanism abstracted within `infra/` to enable adapter swaps (e.g., Docker↔Podman) without touching inner rings. Inner rings never name these ports. The ring invariant is verifiable: `rg 'ContainerEngine|ProcessRunner' src/adda_dev/domain/` must return no matches.
+**Infra-internal ports** — technical mechanism abstracted within `infra/` to enable adapter swaps (e.g., Docker↔Podman) without touching inner rings. Inner rings never name these ports.
 
 - **Container engine:** `ContainerEngine` (`infra/container.py`) → `DockerEngine` (`infra/container.py`); `create_engine()` factory builds the engine and emits the startup banner + rootless warning
 - **Subprocess execution:** `ProcessRunner`/`ProcessHandle` (`infra/process.py`) → `DefaultRunner`, `CapturedOutputRunner` (`infra/process.py`)
