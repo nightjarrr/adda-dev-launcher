@@ -36,7 +36,7 @@ The domain for this system is the *session launch*: a named project running in a
 - `GitHub` — GitHub identity and credential-retrieval parameters; owned by `Project`, embedded directly
 - `AnthropicBackend`, `DeepSeekBackend` — LLM credential-retrieval parameters; loaded from host config via `BackendRepository`, not aggregate roots
 
-**Domain port** — the domain defines one secondary port: `SecretSource`. Entities retrieve credentials through this interface without knowing whether the source is the OS keyring, a test double, or anything else. The domain owns the contract; infrastructure satisfies it.
+**Domain ports** — beyond repository ports, the domain defines several secondary ports: `SecretSource` for credential retrieval by entities (the OS keyring, a test double, or any other source — entities never know which), and `ProxySidecar`, `AddaPrimaryContainer`, `Window`, and `SessionManager` for the session execution and lifecycle layer. The domain owns each contract; infrastructure satisfies it. (Port-to-adapter mapping: §5 Port pattern.)
 
 **Repository ports** — whenever the domain needs to retrieve or manage an aggregate, a repository port is defined in `domain/` and implemented in `infra/`. The domain owns the contract; infrastructure satisfies it. This keeps storage mechanics out of the domain and application rings entirely. Current repository ports: `ProjectRepository`, `BackendRepository`, `SessionRepository`.
 
@@ -51,6 +51,33 @@ Two rules govern the design. First, aggregates reference other aggregates by **i
 **Application Services** (`app/`) — use-case orchestration: the sequence of domain operations that constitutes a launcher session. Imports domain; never imports infrastructure. This ring holds the *algorithm* of the launcher, decoupled from how it is invoked and how domain objects are assembled.
 
 **Infrastructure** (`infra/`) — everything that touches the outside world: TOML I/O, the OS keyring adapter, the CLI entry point, and the composition root that assembles the system from its parts. Imports any inner ring; nothing inner imports it. Technical mechanism (container engine, subprocess execution) also lives here, with its own internal port/adapter split to enable future swaps (e.g., Docker↔Podman) — these infra-internal ports are never named by an inner ring.
+
+### Session lifecycle
+
+The session launch sequence — create a session record, start the proxy sidecar, finalize the contract spec, open the primary window, run the primary container, open secondary windows, wait for the primary to exit, tear everything down in order — is mode-independent. Execution mode (Direct terminal today; tmux in the next phase) determines only *how* windows are created and what mode-specific teardown involves, not the sequence itself. `SessionManager` encodes this invariant algorithm as a domain base class; subclasses supply `create_window()` and two optional hooks (`_open_secondary_windows`, `_teardown`).
+
+**The two lifecycle owners.** `SessionManager` coordinates two objects that each own a running process for the duration of the session:
+
+- **`AddaPrimaryContainer`** — foreground. `start(session, spec, window)` takes a `Window`; the primary container's interactive TTY is bound to that window for the session's duration.
+- **`ProxySidecar`** — background. `start(session)` manages the Envoy container internally (detached) and returns the host-side proxy socket path. `SessionManager._launch()` passes this return value to `draft.finalize(host_socket)` to produce the final `ContractSpec` — the reason the sidecar must start before the spec can be finalized.
+
+Both lifecycle owners are also extensibility surfaces for secondary windows in the tmux layout (planned in the next phase): `AddaPrimaryContainer` will expose a Window-accepting method for an interactive shell into the running container; `ProxySidecar` will expose one for a log watcher. Both are foreground. The `_open_secondary_windows()` hook on `SessionManager` is where subclasses call these methods.
+
+**`attach` is session control, not container lifecycle.** The lifecycle owners own `start`/`stop`. Attaching — blocking until the session ends — is mode-specific: Direct mode waits on the primary process; tmux mode attaches to the tmux session. It belongs on the `SessionManager`/`Window` side.
+
+**Teardown guarantee.** `SessionManager.run()` wraps `_launch()` in `try/finally`, so `_terminate()` fires regardless of where launch fails — whether the container pull fails mid-launch, a secondary window raises, or any other mid-sequence error. SIGTERM is converted to `SystemExit(128 + signum)` in `infra/cli.py` — a `BaseException` that propagates through `finally` and cannot be swallowed by `except Exception`. Together these make teardown reliable under all failure modes.
+
+**Teardown ordering.** `_terminate()` runs: close windows → `container.stop()` → `_teardown()` hook → `sidecar.stop()` → `repo.delete()`. The primary container stops before the sidecar because it depends on the sidecar's proxy socket. The session record is deleted last so it remains available if any teardown step fails.
+
+### Launcher-container contract model
+
+`ContractSpec` is the domain model of the launcher's §1 obligations from `launcher-container-contract.md` — not a command builder, but a typed representation of exactly what the launcher must provide. A value belongs in `ContractSpec` only if it maps to a §1 contract obligation. Values that are contract-mandated defaults (e.g., the hardening booleans `cap_drop_all=True`) are domain field defaults; implementation constants not specified by the contract (e.g., tmpfs option format strings) belong in the infra adapter as private values.
+
+**`ContractSpecDraft` models a temporal dependency.** The proxy socket path is runtime-determined — the sidecar must be running before it is known. `ContractSpecDraft.initialize(project, backend, issue_id)` builds the pre-sidecar shape; `finalize(host_socket)` locks in the socket path and returns the immutable `ContractSpec`. This is why `SessionManager._launch()` starts the sidecar first, captures the returned socket path, and immediately calls `draft.finalize()`.
+
+**Secret isolation.** `ContractTranslator.translate()` produces `ContractProcessParams(args, env)`. Secret values must appear only in `env` — never in `args`. `args` carries flag names only (e.g., `--env KEY`); the secret value is injected into the subprocess environment via `env`. All `ContractTranslator` implementations must honor this constraint.
+
+**Launcher configuration that is not a contract obligation belongs in the adapter, not the spec.** The container command override (`-- CMD` on the CLI) is not a §1 contract obligation and does not belong in `ContractSpec` or `SessionManager`. It is held on `AddaPrimaryContainerImpl` at construction time and passed to the engine at run time.
 
 ---
 
@@ -115,8 +142,10 @@ Two distinct kinds of ports appear in this codebase:
 - **Output delivery:** `Output` Protocol (`common.py`) → `RichOutput` (`infra/output.py`)
 - **Proxy sidecar:** `ProxySidecar` (`domain/proxy.py`) → `EnvoySidecar` (`infra/proxy.py`)
 - **Primary container lifecycle:** `AddaPrimaryContainer` (`domain/adda_container.py`) → `AddaPrimaryContainerImpl` (`infra/adda_container.py`)
+- **Session window:** `Window` (`domain/window.py`) → `DirectWindow` (`infra/session.py`)
+- **Session lifecycle:** `SessionManager` (`domain/session_manager.py`) → `DirectSessionManager` (`infra/session.py`)
 
-**Infra-internal ports** — technical mechanism abstracted within `infra/` to enable adapter swaps (e.g., Docker↔Podman) without touching inner rings. Inner rings never name these ports:
+**Infra-internal ports** — technical mechanism abstracted within `infra/` to enable adapter swaps (e.g., Docker↔Podman) without touching inner rings. Inner rings never name these ports. The ring invariant is verifiable: `rg 'ContainerEngine|ProcessRunner' src/adda_dev/domain/` must return no matches.
 
 - **Container engine:** `ContainerEngine` (`infra/container.py`) → `DockerEngine` (`infra/container.py`); `create_engine()` factory builds the engine and emits the startup banner + rootless warning
 - **Subprocess execution:** `ProcessRunner`/`ProcessHandle` (`infra/process.py`) → `DefaultRunner`, `CapturedOutputRunner` (`infra/process.py`)
@@ -132,13 +161,14 @@ Two distinct kinds of ports appear in this codebase:
 | `domain/llm` | Domain | `LlmBackend` enum, `AnthropicBackend`, `DeepSeekBackend` frozen dataclasses, `BackendRepository` port |
 | `domain/project` | Domain | `Project` domain entity, `ProjectNotFoundError`, `ProjectRepository` port |
 | `domain/session` | Domain | `Session` entity, `SessionNotFoundError`, `SessionRepository` port |
-| `domain/contract` | Domain | `ContractSpec` (+ required `proxy_socket_host_path`), `ContractSpecDraft` (typestate builder: `initialize` seeds from a project, `finalize` binds the session socket and returns a `ContractSpec`), `ContractProcessParams`, `ContractTranslator` port, `ContractError`; contract constants (`CONTAINER_UID`, `CONTAINER_GID`, `CONTAINER_USERNAME`, `PROXY_SOCKET`, `PROXY_PORT`, `RUN_TMPFS_SIZE`, `TMPFS_MODE`) |
+| `domain/contract` | Domain | `ContractSpec` (+ required `proxy_socket_host_path`), `ContractSpecDraft` (typestate builder: `initialize` seeds from a project, `finalize` binds the session socket and returns a `ContractSpec`), `ContractProcessParams`, `ContractTranslator` port, `ContractError`; contract constants (`CONTAINER_UID`, `CONTAINER_GID`, `CONTAINER_USERNAME`, `PROXY_SOCKET`, `PROXY_PORT`) |
 | `domain/proxy` | Domain | `ProxySidecar` port and `ProxyError` — abstract interface for an egress proxy sidecar |
 | `domain/window` | Domain | `Window` ABC — abstract window within a session that owns the process lifecycle for one pane |
 | `domain/adda_container` | Domain | `AddaPrimaryContainer` port — abstract interface for the primary ADDA container lifecycle (`start` takes a `Window`; guarded `stop`) |
-| `app/run` | Application | `run_session()` use case: composes project and backend aggregates, retrieves credentials, displays session info |
+| `domain/session_manager` | Domain | `SessionManager` base class — domain port encoding the mode-independent session lifecycle algorithm; `create_window()` and two hooks (`_open_secondary_windows`, `_teardown`) are the extension points for execution-mode subclasses |
+| `app/run` | Application | `run_session()` use case: loads project and backend aggregates, displays session info, delegates session execution to `SessionManager` |
 | `infra/store` | Infrastructure | XDG-aware storage root resolution (`StorageArea`, `resolve_storage_root`), safe file-name validation, TOML load+write |
-| `infra/session` | Infrastructure | `SessionFileModel` DTO and `FsSessionRepository` — filesystem-backed session lifecycle |
+| `infra/session` | Infrastructure | `SessionFileModel` DTO, `FsSessionRepository` (filesystem-backed session persistence), `DirectWindow` (Window implementation for direct terminal — inherited stdio, no multiplexer), `DirectSessionManager` (SessionManager implementation for Direct mode) |
 | `infra/contract` | Infrastructure | `DockerContractTranslator` — translates `ContractSpec` into `ContractProcessParams` via the Docker env-var mechanism, including the proxy socket bind-mount |
 | `infra/process` | Infrastructure | `ProcessError`, `ProcessHandle`/`ProcessRunner` infra-internal ports, `DefaultRunner`/`CapturedOutputRunner` subprocess adapters |
 | `infra/window` | Infrastructure | `WindowedRunner` + `_WindowHandle` — adapts a domain `Window` to the `ProcessRunner` port so the engine can run into a session pane |
@@ -151,8 +181,6 @@ Two distinct kinds of ports appear in this codebase:
 | `infra/project` | Infrastructure | Project file DTOs (`ProjectFileModel`, `GitHubFileModel`) and `TomlProjectRepository` |
 | `infra/output` | Infrastructure | `RichOutput` — Rich terminal adapter for the `Output` port |
 | `infra/cli` | Infrastructure | Typer entry point and composition root |
-
-The later layers of the launcher — container/network execution and tmux session management — extend this graph as they are built.
 
 ---
 
