@@ -18,7 +18,7 @@ class ContainerEngine(abc.ABC):
     @property
     @abc.abstractmethod
     def name(self) -> str:
-        """Return the short name of the container engine (e.g. 'docker')."""
+        """Return the engine's short name."""
 
     @property
     @abc.abstractmethod
@@ -45,7 +45,7 @@ class ContainerEngine(abc.ABC):
         cmd: list[str] | None = None,
         remove: bool = False,
     ) -> ProcessHandle:
-        """Run an interactive container (docker run -it)."""
+        """Run an interactive (attached) container."""
 
     @abc.abstractmethod
     def run_d(
@@ -58,7 +58,7 @@ class ContainerEngine(abc.ABC):
         cmd: list[str] | None = None,
         remove: bool = False,
     ) -> ProcessHandle:
-        """Run a detached container (docker run -d)."""
+        """Run a detached container."""
 
     @abc.abstractmethod
     def stop(self, runner: ProcessRunner, name: str) -> ProcessHandle:
@@ -74,8 +74,16 @@ class ContainerEngine(abc.ABC):
 
     @abc.abstractmethod
     def logs_f(self, runner: ProcessRunner, name: str) -> ProcessHandle:
-        """Stream logs from a running container (docker logs -f)."""
+        """Stream logs from a running container (follow mode)."""
 
     @abc.abstractmethod
     def inspect(self, runner: ProcessRunner, name: str) -> ProcessHandle:
         """Inspect a container and return its JSON metadata."""
+
+    @abc.abstractmethod
+    def rm(self, runner: ProcessRunner, name: str, force: bool = False) -> ProcessHandle:
+        """Remove a container by name. Pass force=True to remove a running container."""
+
+    @abc.abstractmethod
+    def logs(self, runner: ProcessRunner, name: str) -> ProcessHandle:
+        """Capture a one-shot snapshot of container logs."""

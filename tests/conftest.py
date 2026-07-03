@@ -6,11 +6,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from adda_dev.domain.container import ContainerEngine
-from adda_dev.domain.contract import ContractSpec
+from adda_dev.domain.contract import ContractSpecDraft
 from adda_dev.domain.credentials import SecretError, SecretSource
 from adda_dev.domain.llm import AnthropicBackend, BackendRepository, DeepSeekBackend, LlmBackend
 from adda_dev.domain.process import ProcessHandle, ProcessRunner
 from adda_dev.domain.project import Project, ProjectNotFoundError, ProjectRepository
+from adda_dev.domain.proxy import ProxySidecar
 from adda_dev.domain.session import Session, SessionRepository
 from adda_dev.domain.session_manager import SessionManager, Window
 
@@ -180,27 +181,57 @@ class FakeContainerEngine(ContainerEngine):
         self.calls.append(("inspect", name))
         return _FakeProcessHandle()
 
+    def rm(self, runner: ProcessRunner, name: str, force: bool = False) -> ProcessHandle:
+        self.calls.append(("rm", (name, force)))
+        return _FakeProcessHandle()
+
+    def logs(self, runner: ProcessRunner, name: str) -> ProcessHandle:
+        self.calls.append(("logs", name))
+        return _FakeProcessHandle()
+
+
+class FakeProxySidecar(ProxySidecar):
+    """ProxySidecar test double that records calls and returns a canned host path."""
+
+    def __init__(self, host_socket: Path | None = None) -> None:
+        self._host_socket = host_socket or Path("/tmp/fake-proxy/proxy_socket/proxy.sock")
+        self.start_calls: list[Session] = []
+        self.stop_calls: int = 0
+
+    def start(self, session: Session) -> Path:
+        self.start_calls.append(session)
+        return self._host_socket
+
+    def stop(self) -> None:
+        self.stop_calls += 1
+
 
 class FakeSessionManager(SessionManager):
     """SessionManager test double that records launch and terminate calls without running real processes."""
 
     def __init__(self) -> None:
         self._fake_repo = FakeSessionRepository()
-        super().__init__(self._fake_repo, _FakeContractTranslator(), FakeContainerEngine(), _FakeProcessRunner(), FakeOutput())
-        self.launched: list[tuple[str, ContractSpec]] = []
-        self.terminated: list[str] = []
+        super().__init__(
+            self._fake_repo,
+            _FakeContractTranslator(),
+            FakeContainerEngine(),
+            _FakeProcessRunner(),
+            FakeOutput(),
+            FakeProxySidecar(),
+        )
+        self.launched: list[tuple[str, ContractSpecDraft]] = []
+        self.terminated: int = 0
 
     def create_window(self, name: str) -> Window:
         return _FakeWindow(name)
 
-    def launch(self, project_name: str, spec: ContractSpec) -> Session:
-        session = super().launch(project_name, spec)
-        self.launched.append((project_name, spec))
-        return session
+    def _launch(self, project_name: str, draft: ContractSpecDraft) -> None:
+        super()._launch(project_name, draft)
+        self.launched.append((project_name, draft))
 
-    def terminate(self, session: Session) -> None:
-        super().terminate(session)
-        self.terminated.append(session.session_id)
+    def _terminate(self) -> None:
+        super()._terminate()
+        self.terminated += 1
 
 
 class _FakeProcessRunner(ProcessRunner):
@@ -226,7 +257,7 @@ class _FakeWindow(Window):
 class _FakeContractTranslator:
     """ContractTranslator test double that returns a fixed no-op command."""
 
-    def translate(self, spec: ContractSpec) -> object:
+    def translate(self, spec: object) -> object:
         from adda_dev.domain.contract import ContractProcessParams
 
         return ContractProcessParams(args=("true",), env={})

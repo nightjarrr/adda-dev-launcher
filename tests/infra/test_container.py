@@ -190,7 +190,20 @@ def test_dockerengine_run_it_forwards_env(rootless_docker_path: Path) -> None:
     rec = _RecordingRunner()
     env = {"MY_VAR": "value", "TOKEN": "secret"}
     engine.run_it(rec, "alpine", "my-container", [], env)
-    assert rec.last_env == env
+    # provided keys must be present with their values; host PATH must also be present (overlay)
+    assert rec.last_env is not None
+    assert rec.last_env["MY_VAR"] == "value"
+    assert rec.last_env["TOKEN"] == "secret"
+    assert "PATH" in rec.last_env
+
+
+def test_dockerengine_run_it_env_precedence_over_host(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    env = {"PATH": "/custom/bin"}
+    engine.run_it(rec, "alpine", "my-container", [], env)
+    assert rec.last_env is not None
+    assert rec.last_env["PATH"] == "/custom/bin"
 
 
 def test_dockerengine_run_it_env_defaults_to_none(rootless_docker_path: Path) -> None:
@@ -219,7 +232,10 @@ def test_dockerengine_run_d_forwards_env(rootless_docker_path: Path) -> None:
     rec = _RecordingRunner()
     env = {"SOME_VAR": "123"}
     engine.run_d(rec, "alpine", "my-container", [], env)
-    assert rec.last_env == env
+    # provided keys must be present; host PATH must also be present (overlay)
+    assert rec.last_env is not None
+    assert rec.last_env["SOME_VAR"] == "123"
+    assert "PATH" in rec.last_env
 
 
 def test_dockerengine_run_d_env_defaults_to_none(rootless_docker_path: Path) -> None:
@@ -273,6 +289,36 @@ def test_dockerengine_methods_return_runner_handle(rootless_docker_path: Path) -
     assert engine.exec_it(rec, "c", ["sh"]) is rec.last_handle
     assert engine.logs_f(rec, "c") is rec.last_handle
     assert engine.inspect(rec, "c") is rec.last_handle
+    assert engine.rm(rec, "c") is rec.last_handle
+    assert engine.logs(rec, "c") is rec.last_handle
+
+
+def test_dockerengine_rm_argv_without_force(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.rm(rec, "my-container")
+    assert rec.last_cmd == ["docker", "rm", "my-container"]
+
+
+def test_dockerengine_rm_argv_with_force(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.rm(rec, "my-container", force=True)
+    assert rec.last_cmd == ["docker", "rm", "-f", "my-container"]
+
+
+def test_dockerengine_rm_without_force_no_f_flag(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.rm(rec, "my-container", force=False)
+    assert "-f" not in rec.last_cmd
+
+
+def test_dockerengine_logs_argv(rootless_docker_path: Path) -> None:
+    engine = DockerEngine()
+    rec = _RecordingRunner()
+    engine.logs(rec, "my-container")
+    assert rec.last_cmd == ["docker", "logs", "my-container"]
 
 
 # ---------------------------------------------------------------------------

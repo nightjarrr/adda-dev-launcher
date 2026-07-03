@@ -3,6 +3,7 @@
 import pytest
 
 from adda_dev.app.run import run_session
+from adda_dev.domain.contract import ContractSpecDraft
 from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicBackend, LlmBackend
 from adda_dev.domain.project import Project
@@ -162,7 +163,7 @@ def test_run_session_output_includes_root_in_engine_banner_when_not_rootless() -
 # ---------------------------------------------------------------------------
 
 
-def test_run_session_calls_launch_with_correct_project_name() -> None:
+def test_run_session_calls_run_with_draft() -> None:
     source = _make_fake_source()
     project = _make_project(source)
     backend = _make_backend(source)
@@ -176,6 +177,7 @@ def test_run_session_calls_launch_with_correct_project_name() -> None:
 
     assert len(session_manager.launched) == 1
     assert session_manager.launched[0][0] == "demo"
+    assert isinstance(session_manager.launched[0][1], ContractSpecDraft)
 
 
 def test_run_session_calls_terminate_after_launch() -> None:
@@ -190,10 +192,10 @@ def test_run_session_calls_terminate_after_launch() -> None:
 
     run_session("demo", project_repo, backend_repo, engine, session_manager, output)
 
-    assert len(session_manager.terminated) == 1
+    assert session_manager.terminated == 1
 
 
-def test_run_session_launch_passes_issue_id_in_spec() -> None:
+def test_run_session_launch_passes_issue_id_in_draft() -> None:
     source = _make_fake_source()
     project = _make_project(source)
     backend = _make_backend(source)

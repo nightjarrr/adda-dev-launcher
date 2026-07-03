@@ -119,4 +119,8 @@ class DockerContractTranslator(ContractTranslator):
         if spec.network_none:
             hardening += ["--network", "none"]
         hardening_args = tuple(hardening)
-        return ContractProcessParams(args=env_args + tmpfs_args + hardening_args, env=secrets)
+        socket_mount = (
+            "--mount",
+            f"type=bind,source={spec.proxy_socket_host_path},target={spec.proxy_socket},readonly",
+        )
+        return ContractProcessParams(args=env_args + tmpfs_args + hardening_args + socket_mount, env=secrets)
