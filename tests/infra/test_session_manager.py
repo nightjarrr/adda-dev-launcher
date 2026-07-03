@@ -9,8 +9,8 @@ from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicBackend, LlmBackend
 from adda_dev.domain.process import ProcessHandle
 from adda_dev.domain.project import Project
-from adda_dev.domain.session_manager import Window
 from adda_dev.domain.tmpfs import TmpfsSizes
+from adda_dev.domain.window import Window
 from adda_dev.infra.session import DirectSessionManager, DirectWindow
 from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSecretSource, FakeSessionRepository
 
@@ -159,15 +159,16 @@ def test_directsessionmanager_launch_with_issue_id_creates_session() -> None:
 
 
 def test_directsessionmanager_launch_starts_container() -> None:
-    """_launch must call container.start with the created session and finalized spec."""
+    """_launch must call container.start with the created session, finalized spec, and the created window."""
     repo = FakeSessionRepository()
     container = FakeAddaPrimaryContainer()
     manager = _make_manager(repo=repo, container=container)
     manager._launch("my-project", _make_draft())
     assert len(container.start_calls) == 1
-    session, spec, _runner = container.start_calls[0]
+    session, spec, window = container.start_calls[0]
     assert session.project_name == "my-project"
     assert isinstance(spec, ContractSpec)
+    assert isinstance(window, Window)
 
 
 # ---------------------------------------------------------------------------

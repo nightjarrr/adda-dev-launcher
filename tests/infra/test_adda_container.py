@@ -8,6 +8,7 @@ from pathlib import Path
 from adda_dev.domain.contract import ContractProcessParams, ContractSpec, ContractTranslator
 from adda_dev.domain.process import ProcessHandle, ProcessRunner
 from adda_dev.domain.session import Session
+from adda_dev.domain.window import Window, WindowedRunner
 from adda_dev.infra.adda_container import AddaPrimaryContainerImpl
 from tests.conftest import FakeContainerEngine
 
@@ -57,9 +58,17 @@ class _FakeHandle(ProcessHandle):
         return ""
 
 
-class _FakeProcessRunner(ProcessRunner):
-    def run(self, cmd: list[str], env: dict[str, str] | None = None) -> ProcessHandle:
-        return _FakeHandle()
+class _FakeWindow(Window):
+    """Window test double that records open/attach/close calls without running real processes."""
+
+    def open(self, cmd: list[str], env: dict[str, str] | None = None) -> None:
+        pass
+
+    def attach(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
 
 
 class _FixedTranslator(ContractTranslator):
@@ -83,7 +92,7 @@ def test_addaprimarycontainer_start_calls_pull_with_spec_image() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator()
     impl = AddaPrimaryContainerImpl(engine, translator)
-    impl.start(_make_session(), _make_spec(), _FakeProcessRunner())
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     pull_calls = [c for c in engine.calls if c[0] == "pull"]
     assert len(pull_calls) == 1
     assert pull_calls[0][1] == _TEST_IMAGE
@@ -93,7 +102,7 @@ def test_addaprimarycontainer_start_calls_run_it() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator()
     impl = AddaPrimaryContainerImpl(engine, translator)
-    impl.start(_make_session(), _make_spec(), _FakeProcessRunner())
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     assert len(run_it_calls) == 1
 
@@ -102,7 +111,7 @@ def test_addaprimarycontainer_start_run_it_name_equals_session_id() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator()
     impl = AddaPrimaryContainerImpl(engine, translator)
-    impl.start(_make_session(), _make_spec(), _FakeProcessRunner())
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     _image, name, _args, _env, _cmd, _remove = run_it_calls[0][1]  # type: ignore[misc]
     assert name == _TEST_SESSION_ID
@@ -112,7 +121,7 @@ def test_addaprimarycontainer_start_run_it_remove_is_true() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator()
     impl = AddaPrimaryContainerImpl(engine, translator)
-    impl.start(_make_session(), _make_spec(), _FakeProcessRunner())
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     _image, _name, _args, _env, _cmd, remove = run_it_calls[0][1]  # type: ignore[misc]
     assert remove is True
@@ -122,7 +131,7 @@ def test_addaprimarycontainer_start_run_it_uses_translator_args_and_env() -> Non
     engine = FakeContainerEngine()
     translator = _FixedTranslator(args=("--custom-arg", "--other"), env={"SECRET": "s"})
     impl = AddaPrimaryContainerImpl(engine, translator)
-    impl.start(_make_session(), _make_spec(), _FakeProcessRunner())
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     _image, _name, args, env, _cmd, _remove = run_it_calls[0][1]  # type: ignore[misc]
     assert args == ["--custom-arg", "--other"]
@@ -134,14 +143,14 @@ def test_addaprimarycontainer_start_calls_translate_with_spec() -> None:
     translator = _FixedTranslator()
     impl = AddaPrimaryContainerImpl(engine, translator)
     spec = _make_spec()
-    impl.start(_make_session(), spec, _FakeProcessRunner())
+    impl.start(_make_session(), spec, _FakeWindow("w"))
     assert len(translator.translate_calls) == 1
     assert translator.translate_calls[0] is spec
 
 
-def test_addaprimarycontainer_start_forwards_runner_to_run_it() -> None:
-    """start() must pass the caller's runner to engine.run_it (not an internal one)."""
-    caller_runner = _FakeProcessRunner()
+def test_addaprimarycontainer_start_wraps_window_in_windowed_runner() -> None:
+    """start() must wrap the caller's Window in a WindowedRunner and pass it to engine.run_it."""
+    fake_window = _FakeWindow("w")
     captured_runners: list[ProcessRunner] = []
 
     class _CapturingEngine(FakeContainerEngine):
@@ -161,9 +170,10 @@ def test_addaprimarycontainer_start_forwards_runner_to_run_it() -> None:
 
     engine = _CapturingEngine()
     impl = AddaPrimaryContainerImpl(engine, _FixedTranslator())
-    impl.start(_make_session(), _make_spec(), caller_runner)
+    impl.start(_make_session(), _make_spec(), fake_window)
     assert len(captured_runners) == 1
-    assert captured_runners[0] is caller_runner
+    assert isinstance(captured_runners[0], WindowedRunner)
+    assert captured_runners[0]._window is fake_window
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +196,7 @@ def test_addaprimarycontainer_stop_before_start_is_noop() -> None:
 def test_addaprimarycontainer_stop_after_start_calls_stop_then_rm() -> None:
     engine = FakeContainerEngine()
     impl = AddaPrimaryContainerImpl(engine, _FixedTranslator())
-    impl.start(_make_session(), _make_spec(), _FakeProcessRunner())
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     impl.stop()
     ops = [c[0] for c in engine.calls]
     assert "stop" in ops
@@ -196,7 +206,7 @@ def test_addaprimarycontainer_stop_after_start_calls_stop_then_rm() -> None:
 def test_addaprimarycontainer_stop_rm_uses_force_true() -> None:
     engine = FakeContainerEngine()
     impl = AddaPrimaryContainerImpl(engine, _FixedTranslator())
-    impl.start(_make_session(), _make_spec(), _FakeProcessRunner())
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     impl.stop()
     rm_calls = [c for c in engine.calls if c[0] == "rm"]
     assert rm_calls

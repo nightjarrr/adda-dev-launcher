@@ -5,8 +5,8 @@ AddaPrimaryContainerImpl adapter: pulls and runs the primary ADDA container, wit
 from ..domain.adda_container import AddaPrimaryContainer
 from ..domain.container import ContainerEngine
 from ..domain.contract import ContractSpec, ContractTranslator
-from ..domain.process import ProcessRunner
 from ..domain.session import Session
+from ..domain.window import Window, WindowedRunner
 from .process import CapturedOutputRunner, DefaultRunner
 
 
@@ -22,13 +22,13 @@ class AddaPrimaryContainerImpl(AddaPrimaryContainer):
 
     # Public methods
 
-    def start(self, session: Session, spec: ContractSpec, runner: ProcessRunner) -> None:
-        """Translate spec, pull the image, and run the container interactively into runner."""
+    def start(self, session: Session, spec: ContractSpec, window: Window) -> None:
+        """Translate spec, pull the image, and run the container interactively into the given window."""
         # Set name first so stop() covers post-start failures
         self._name = session.session_id
         params = self._translator.translate(spec)
         self._engine.pull(self._pull_runner, spec.image).wait()
-        self._engine.run_it(runner, spec.image, session.session_id, list(params.args), params.env, remove=True)
+        self._engine.run_it(WindowedRunner(window), spec.image, session.session_id, list(params.args), params.env, remove=True)
 
     def stop(self) -> None:
         """Stop and remove the primary container, best-effort."""

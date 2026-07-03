@@ -127,13 +127,14 @@ Ports are defined in the domain or shared kernel; infrastructure provides the pr
 | `domain/session` | Domain | `Session` entity, `SessionNotFoundError`, `SessionRepository` port |
 | `domain/contract` | Domain | `ContractSpec` (+ required `proxy_socket_host_path`), `ContractSpecDraft` (typestate builder: `initialize` seeds from a project, `finalize` binds the session socket and returns a `ContractSpec`), `ContractProcessParams`, `ContractTranslator` port, `ContractError`; contract constants (`CONTAINER_UID`, `CONTAINER_GID`, `CONTAINER_USERNAME`, `PROXY_SOCKET`, `PROXY_PORT`, `RUN_TMPFS_SIZE`, `TMPFS_MODE`) |
 | `domain/proxy` | Domain | `ProxySidecar` port and `ProxyError` — abstract interface for an egress proxy sidecar |
-| `domain/adda_container` | Domain | `AddaPrimaryContainer` port — abstract interface for the primary ADDA container lifecycle (start + guarded stop) |
+| `domain/window` | Domain | `Window` ABC (one pane/process), `WindowedRunner` bridge (adapts `Window` to `ProcessRunner`) |
+| `domain/adda_container` | Domain | `AddaPrimaryContainer` port — abstract interface for the primary ADDA container lifecycle (`start` takes a `Window`; guarded `stop`) |
 | `app/run` | Application | `run_session()` use case: composes project and backend aggregates, retrieves credentials, displays session info |
 | `infra/store` | Infrastructure | XDG-aware storage root resolution (`StorageArea`, `resolve_storage_root`), safe file-name validation, TOML load+write |
 | `infra/session` | Infrastructure | `SessionFileModel` DTO and `FsSessionRepository` — filesystem-backed session lifecycle |
 | `infra/contract` | Infrastructure | `DockerContractTranslator` — translates `ContractSpec` into `ContractProcessParams` via the Docker env-var mechanism, including the proxy socket bind-mount |
 | `infra/proxy` | Infrastructure | `EnvoySidecar` — renders the bundled `envoy.yaml.template`, starts the Envoy container detached, polls for the Unix socket, and stops+removes on teardown |
-| `infra/adda_container` | Infrastructure | `AddaPrimaryContainerImpl` — translates spec, pulls image, runs primary ADDA container interactively, and provides guarded stop+rm teardown |
+| `infra/adda_container` | Infrastructure | `AddaPrimaryContainerImpl` — translates spec, pulls image, wraps `Window` in `WindowedRunner`, runs primary ADDA container interactively, and provides guarded stop+rm teardown |
 | `infra/keyring_source` | Infrastructure | `KeyringSecretSource` — OS keyring adapter for the `SecretSource` port |
 | `infra/llm` | Infrastructure | LLM config DTOs (`AnthropicConfigModel`, `DeepSeekConfigModel`, `LlmConfig`) and `LlmConfigBackendRepository` |
 | `infra/config` | Infrastructure | Host config DTOs (`AppConfig`, `ProjectDefaults`, `ContainerEngine`) and `load_app_config()` |

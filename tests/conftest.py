@@ -14,7 +14,8 @@ from adda_dev.domain.process import ProcessHandle, ProcessRunner
 from adda_dev.domain.project import Project, ProjectNotFoundError, ProjectRepository
 from adda_dev.domain.proxy import ProxySidecar
 from adda_dev.domain.session import Session, SessionRepository
-from adda_dev.domain.session_manager import SessionManager, Window
+from adda_dev.domain.session_manager import SessionManager
+from adda_dev.domain.window import Window
 
 
 class FakeSecretSource(SecretSource):
@@ -211,11 +212,11 @@ class FakeAddaPrimaryContainer(AddaPrimaryContainer):
     """AddaPrimaryContainer test double that records start and stop calls."""
 
     def __init__(self) -> None:
-        self.start_calls: list[tuple[Session, ContractSpec, ProcessRunner]] = []
+        self.start_calls: list[tuple[Session, ContractSpec, Window]] = []
         self.stop_calls: int = 0
 
-    def start(self, session: Session, spec: ContractSpec, runner: ProcessRunner) -> None:
-        self.start_calls.append((session, spec, runner))
+    def start(self, session: Session, spec: ContractSpec, window: Window) -> None:
+        self.start_calls.append((session, spec, window))
 
     def stop(self) -> None:
         self.stop_calls += 1
