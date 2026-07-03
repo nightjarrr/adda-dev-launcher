@@ -27,19 +27,6 @@ _FAKE_HOST_SOCKET = Path("/tmp/test-session/proxy_socket/proxy.sock")
 # ---------------------------------------------------------------------------
 
 
-def _make_github_and_source() -> tuple[object, FakeSecretSource]:
-    source = FakeSecretSource(
-        {
-            ("adda-dev:github", "gh-token"): "ghp_test",
-            ("adda-dev:anthropic", "claude-key"): "claude_test",
-        }
-    )
-    from adda_dev.domain.github import GitHub
-
-    github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    return github, source
-
-
 def _make_anthropic_spec() -> ContractSpec:
     from adda_dev.domain.github import GitHub
 

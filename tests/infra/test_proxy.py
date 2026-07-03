@@ -445,6 +445,70 @@ def test_envoy_sidecar_stop_after_start_calls_stop_and_rm(tmp_path: Path) -> Non
     assert any(c[0] == "rm" for c in eng.calls)
 
 
+# ---------------------------------------------------------------------------
+# EnvoySidecar.stop — best-effort exception swallowing
+# ---------------------------------------------------------------------------
+
+
+class _RaisingStopEngine(FakeContainerEngine):
+    """Engine whose stop() raises; rm() succeeds."""
+
+    def stop(self, runner: object, name: str) -> _FakeHandle:  # type: ignore[override]
+        raise RuntimeError("stop failed")
+
+
+class _RaisingRmEngine(FakeContainerEngine):
+    """Engine whose stop() succeeds but rm() raises."""
+
+    def rm(self, runner: object, name: str, force: bool = False) -> _FakeHandle:  # type: ignore[override]
+        raise RuntimeError("rm failed")
+
+
+class _RaisingInspectEngine(FakeContainerEngine):
+    """Engine whose inspect() raises; logs() returns a trivial handle."""
+
+    def inspect(self, runner: object, name: str) -> _FakeHandle:  # type: ignore[override]
+        raise RuntimeError("inspect failed")
+
+    def logs(self, runner: object, name: str) -> _FakeHandle:  # type: ignore[override]
+        return _FakeHandle(rc=0, out="", err="")
+
+
+class _RaisingLogsEngine(_ExitedEngine):
+    """Engine that reports the container as exited but raises on logs()."""
+
+    def logs(self, runner: object, name: str) -> _FakeHandle:  # type: ignore[override]
+        raise RuntimeError("logs failed")
+
+
+def test_envoy_sidecar_stop_swallows_stop_exception() -> None:
+    sidecar = EnvoySidecar(_RaisingStopEngine(), _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None)
+    sidecar._container_name = "test-envoy"
+    sidecar.stop()  # must not raise
+
+
+def test_envoy_sidecar_stop_swallows_rm_exception() -> None:
+    sidecar = EnvoySidecar(_RaisingRmEngine(), _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None)
+    sidecar._container_name = "test-envoy"
+    sidecar.stop()  # must not raise
+
+
+def test_envoy_sidecar_container_exited_on_inspect_exception(tmp_path: Path) -> None:
+    sidecar = EnvoySidecar(
+        _RaisingInspectEngine(), _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3
+    )
+    with pytest.raises(ProxyError):
+        sidecar.start(tmp_path)
+
+
+def test_envoy_sidecar_capture_logs_swallows_exception(tmp_path: Path) -> None:
+    sidecar = EnvoySidecar(
+        _RaisingLogsEngine(), _FakeRunner(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3
+    )
+    with pytest.raises(ProxyError):
+        sidecar.start(tmp_path)
+
+
 def test_envoy_sidecar_stop_rm_uses_force(tmp_path: Path) -> None:
     socket_path = tmp_path / "proxy_socket" / "proxy.sock"
 

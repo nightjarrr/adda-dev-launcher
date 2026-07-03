@@ -6,6 +6,7 @@ import importlib.resources
 import json
 import os
 import time
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
 from ..common import Output
@@ -43,7 +44,7 @@ class EnvoySidecar(ProxySidecar):
         envoy_image: str,
         output: Output,
         *,
-        sleep: object = time.sleep,
+        sleep: Callable[[float], object] = time.sleep,
         attempts: int = _POLL_ATTEMPTS,
         interval: float = _POLL_INTERVAL_S,
     ) -> None:
@@ -126,7 +127,7 @@ class EnvoySidecar(ProxySidecar):
             if self._container_exited():
                 logs = self._capture_logs()
                 raise ProxyError(f"Envoy exited before creating the proxy socket\n{logs}")
-            self._sleep(self._interval)  # type: ignore[operator]
+            self._sleep(self._interval)
 
         logs = self._capture_logs()
         raise ProxyError(f"Proxy socket not ready after {self._attempts} attempts\n{logs}")

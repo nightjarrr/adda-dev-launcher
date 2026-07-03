@@ -7,7 +7,7 @@ import os
 
 from ..common import Output
 from ..domain.container import ContainerEngine
-from ..domain.contract import ContractSpecDraft, ContractTranslator
+from ..domain.contract import ContractSpec, ContractSpecDraft, ContractTranslator
 from ..domain.process import ProcessHandle, ProcessRunner
 from ..domain.proxy import ProxySidecar
 from ..domain.session import Session, SessionRepository
@@ -120,7 +120,7 @@ class SessionManager(abc.ABC):
     def create_window(self, name: str) -> Window:
         """Return a new Window for the given session name."""
 
-    def _open_secondary_windows(self, session: Session, spec: object) -> None:
+    def _open_secondary_windows(self, session: Session, spec: ContractSpec) -> None:
         """Hook: open extra windows (e.g. shell, logs). No-op for Direct mode."""
 
     def _teardown(self) -> None:
