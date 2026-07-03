@@ -5,17 +5,33 @@ Tests for adda_dev.infra.proxy: render_envoy_config and EnvoySidecar.
 import json
 import socket
 import stat
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from adda_dev.domain.proxy import ProxyError
+from adda_dev.domain.session import Session
 from adda_dev.infra.proxy import (
     ENVOY_SOCKET_CONTAINER_PATH,
     EnvoySidecar,
     render_envoy_config,
 )
 from tests.conftest import FakeContainerEngine, FakeOutput
+
+_TEST_SESSION_ID = "adda-dev-session-test1234"
+
+
+def _make_session(tmp_path: Path) -> Session:
+    """Build a minimal Session whose runtime_dir is tmp_path."""
+    return Session(
+        session_id=_TEST_SESSION_ID,
+        project_name="p",
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        runtime_dir=tmp_path,
+        issue_id=None,
+    )
+
 
 _FAKE_ENVOY_IMAGE = "envoyproxy/envoy:test"
 
@@ -166,14 +182,14 @@ def test_render_envoy_config_returns_str() -> None:
 def test_envoy_sidecar_start_creates_proxy_socket_dir(tmp_path: Path) -> None:
     sidecar, _ = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     assert (tmp_path / "proxy_socket").is_dir()
 
 
 def test_envoy_sidecar_start_creates_envoy_yaml(tmp_path: Path) -> None:
     sidecar, _ = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     config_path = tmp_path / "envoy.yaml"
     assert config_path.exists()
     assert ENVOY_SOCKET_CONTAINER_PATH in config_path.read_text()
@@ -182,7 +198,7 @@ def test_envoy_sidecar_start_creates_envoy_yaml(tmp_path: Path) -> None:
 def test_envoy_sidecar_start_config_permissions(tmp_path: Path) -> None:
     sidecar, _ = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     config_path = tmp_path / "envoy.yaml"
     assert config_path.exists()
     mode = stat.S_IMODE(config_path.stat().st_mode)
@@ -192,7 +208,7 @@ def test_envoy_sidecar_start_config_permissions(tmp_path: Path) -> None:
 def test_envoy_sidecar_start_proxy_socket_dir_permissions(tmp_path: Path) -> None:
     sidecar, _ = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     socket_dir = tmp_path / "proxy_socket"
     assert socket_dir.is_dir()
     mode = stat.S_IMODE(socket_dir.stat().st_mode)
@@ -207,7 +223,7 @@ def test_envoy_sidecar_start_proxy_socket_dir_permissions(tmp_path: Path) -> Non
 def test_envoy_sidecar_start_calls_pull(tmp_path: Path) -> None:
     sidecar, engine = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     pull_calls = [c for c in engine.calls if c[0] == "pull"]
     assert any(_FAKE_ENVOY_IMAGE in str(c[1]) for c in pull_calls)
 
@@ -215,7 +231,7 @@ def test_envoy_sidecar_start_calls_pull(tmp_path: Path) -> None:
 def test_envoy_sidecar_start_calls_run_d(tmp_path: Path) -> None:
     sidecar, engine = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
     assert len(run_d_calls) == 1
 
@@ -223,17 +239,28 @@ def test_envoy_sidecar_start_calls_run_d(tmp_path: Path) -> None:
 def test_envoy_sidecar_start_run_d_uses_envoy_image(tmp_path: Path) -> None:
     sidecar, engine = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
     _, (image, _name, _args, _env, _cmd, _remove) = run_d_calls[0]
     assert image == _FAKE_ENVOY_IMAGE
+
+
+def test_envoy_sidecar_start_run_d_container_name_uses_session_id(tmp_path: Path) -> None:
+    """Container name must be {session_id}_proxy — derived from the session, not the dir name."""
+    sidecar, engine = _make_exited_sidecar()
+    session = _make_session(tmp_path)
+    with pytest.raises(ProxyError):
+        sidecar.start(session)
+    run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
+    _, (_image, name, _args, _env, _cmd, _remove) = run_d_calls[0]
+    assert name == f"{session.session_id}_proxy"
 
 
 def test_envoy_sidecar_start_run_d_without_remove(tmp_path: Path) -> None:
     """Envoy container must start without --rm so logs survive after exit."""
     sidecar, engine = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
     _, (_image, _name, _args, _env, _cmd, remove) = run_d_calls[0]
     assert remove is False
@@ -242,7 +269,7 @@ def test_envoy_sidecar_start_run_d_without_remove(tmp_path: Path) -> None:
 def test_envoy_sidecar_start_run_d_cmd_uses_config_path(tmp_path: Path) -> None:
     sidecar, engine = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
     _, (_image, _name, _args, _env, cmd, _remove) = run_d_calls[0]
     assert cmd == ["-c", "/etc/adda-dev/envoy.yaml"]
@@ -251,7 +278,7 @@ def test_envoy_sidecar_start_run_d_cmd_uses_config_path(tmp_path: Path) -> None:
 def test_envoy_sidecar_start_run_d_args_include_cap_drop(tmp_path: Path) -> None:
     sidecar, engine = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
     _, (_image, _name, args, _env, _cmd, _remove) = run_d_calls[0]
     assert "--cap-drop" in args and "ALL" in args
@@ -260,7 +287,7 @@ def test_envoy_sidecar_start_run_d_args_include_cap_drop(tmp_path: Path) -> None
 def test_envoy_sidecar_start_run_d_args_include_read_only(tmp_path: Path) -> None:
     sidecar, engine = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
     _, (_image, _name, args, _env, _cmd, _remove) = run_d_calls[0]
     assert "--read-only" in args
@@ -269,7 +296,7 @@ def test_envoy_sidecar_start_run_d_args_include_read_only(tmp_path: Path) -> Non
 def test_envoy_sidecar_start_run_d_args_include_config_mount(tmp_path: Path) -> None:
     sidecar, engine = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
     _, (_image, _name, args, _env, _cmd, _remove) = run_d_calls[0]
     mount_vals = [args[i + 1] for i, a in enumerate(args) if a == "--mount"]
@@ -279,7 +306,7 @@ def test_envoy_sidecar_start_run_d_args_include_config_mount(tmp_path: Path) -> 
 def test_envoy_sidecar_start_run_d_args_include_socket_dir_mount(tmp_path: Path) -> None:
     sidecar, engine = _make_exited_sidecar()
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     run_d_calls = [c for c in engine.calls if c[0] == "run_d"]
     _, (_image, _name, args, _env, _cmd, _remove) = run_d_calls[0]
     mount_vals = [args[i + 1] for i, a in enumerate(args) if a == "--mount"]
@@ -320,7 +347,7 @@ def test_envoy_sidecar_start_poll_success_returns_host_socket(tmp_path: Path) ->
 
     eng = _SocketCreatingEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=5)
-    result = sidecar.start(tmp_path)
+    result = sidecar.start(_make_session(tmp_path))
     assert result == socket_path
 
 
@@ -350,7 +377,7 @@ def test_envoy_sidecar_start_poll_success_emits_ready_message(tmp_path: Path) ->
     output = FakeOutput()
     eng = _SocketCreatingEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, output, sleep=lambda _: None, attempts=5)
-    sidecar.start(tmp_path)
+    sidecar.start(_make_session(tmp_path))
     assert any("ready" in msg.lower() or "envoy" in msg.lower() for msg in output.info_calls)
 
 
@@ -363,14 +390,14 @@ def test_envoy_sidecar_start_failfast_on_exit_raises_proxy_error(tmp_path: Path)
     eng = _ExitedEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
     with pytest.raises(ProxyError, match="exited"):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
 
 
 def test_envoy_sidecar_start_failfast_captures_logs(tmp_path: Path) -> None:
     eng = _ExitedEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
     with pytest.raises(ProxyError) as exc_info:
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     assert exc_info.value.stdout == "envoy crashed"
 
 
@@ -378,7 +405,7 @@ def test_envoy_sidecar_start_failfast_on_inspect_failure(tmp_path: Path) -> None
     eng = _FailInspectEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
 
 
 # ---------------------------------------------------------------------------
@@ -390,14 +417,14 @@ def test_envoy_sidecar_start_timeout_raises_proxy_error(tmp_path: Path) -> None:
     eng = _AlwaysRunningEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError, match="not ready"):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
 
 
 def test_envoy_sidecar_start_timeout_captures_logs(tmp_path: Path) -> None:
     eng = _AlwaysRunningEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError) as exc_info:
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     assert exc_info.value.stdout == "still starting"
 
 
@@ -426,7 +453,7 @@ def test_envoy_sidecar_start_run_d_nonzero_exit_raises(tmp_path: Path) -> None:
     eng = _FailRunDEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
     # stop() must be a no-op since _container_name was never set
     sidecar.stop()
     assert not any(c[0] in ("stop", "rm") for c in eng.calls)
@@ -469,7 +496,7 @@ def test_envoy_sidecar_stop_after_start_calls_stop_and_rm(tmp_path: Path) -> Non
 
     eng = _SocketCreatingEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=5)
-    sidecar.start(tmp_path)
+    sidecar.start(_make_session(tmp_path))
     sidecar.stop()
     assert any(c[0] == "stop" for c in eng.calls)
     assert any(c[0] == "rm" for c in eng.calls)
@@ -526,13 +553,13 @@ def test_envoy_sidecar_stop_swallows_rm_exception() -> None:
 def test_envoy_sidecar_container_exited_on_inspect_exception(tmp_path: Path) -> None:
     sidecar = EnvoySidecar(_RaisingInspectEngine(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
 
 
 def test_envoy_sidecar_capture_logs_swallows_exception(tmp_path: Path) -> None:
     sidecar = EnvoySidecar(_RaisingLogsEngine(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError):
-        sidecar.start(tmp_path)
+        sidecar.start(_make_session(tmp_path))
 
 
 def test_envoy_sidecar_stop_rm_uses_force(tmp_path: Path) -> None:
@@ -560,7 +587,7 @@ def test_envoy_sidecar_stop_rm_uses_force(tmp_path: Path) -> None:
 
     eng = _SocketCreatingEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=5)
-    sidecar.start(tmp_path)
+    sidecar.start(_make_session(tmp_path))
     sidecar.stop()
     rm_calls = [c for c in eng.calls if c[0] == "rm"]
     assert rm_calls

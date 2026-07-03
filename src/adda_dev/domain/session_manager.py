@@ -94,7 +94,7 @@ class SessionManager(abc.ABC):
         """Create a session, start the sidecar, pull and run the main container."""
         session = self._repo.create(project_name, draft.issue_id)
         self._session = session
-        host_socket = self._sidecar.start(session.runtime_dir)
+        host_socket = self._sidecar.start(session)
         spec = draft.finalize(host_socket)
         params = self._translator.translate(spec)
         self._output.info(f"Session:  {session.session_id}")

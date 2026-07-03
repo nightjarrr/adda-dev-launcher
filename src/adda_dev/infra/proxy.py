@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 from ..common import Output
 from ..domain.container import ContainerEngine
 from ..domain.proxy import ProxyError, ProxySidecar
+from ..domain.session import Session
 from .process import CapturedOutputRunner
 
 # Single source of truth for the Envoy-internal socket path.
@@ -58,13 +59,13 @@ class EnvoySidecar(ProxySidecar):
 
     # Public methods
 
-    def start(self, runtime_dir: Path) -> Path:
-        """Start the Envoy sidecar and return the host socket path when Envoy is ready."""
-        socket_dir = runtime_dir / "proxy_socket"
+    def start(self, session: Session) -> Path:
+        """Start the Envoy sidecar for the given session and return the host socket path when Envoy is ready."""
+        socket_dir = session.runtime_dir / "proxy_socket"
         socket_dir.mkdir(mode=0o700)
 
         config_text = render_envoy_config(ENVOY_SOCKET_CONTAINER_PATH)
-        config_path = runtime_dir / "envoy.yaml"
+        config_path = session.runtime_dir / "envoy.yaml"
         config_path.write_text(config_text, encoding="utf-8")
         config_path.chmod(0o600)
 
@@ -72,7 +73,7 @@ class EnvoySidecar(ProxySidecar):
 
         self._engine.pull(self._runner, self._envoy_image).wait()
 
-        name = f"adda-dev-envoy-{runtime_dir.name}"
+        name = f"{session.session_id}_proxy"
         args = self._build_args(socket_dir, config_path)
         cmd = ["-c", _ENVOY_CONFIG_CONTAINER_PATH]
 

@@ -6,6 +6,7 @@ import abc
 from pathlib import Path
 
 from ..common import AddaDevError
+from .session import Session
 
 
 class ProxyError(AddaDevError):
@@ -29,8 +30,8 @@ class ProxySidecar(abc.ABC):
     """Abstract port for starting and stopping an egress proxy sidecar."""
 
     @abc.abstractmethod
-    def start(self, runtime_dir: Path) -> Path:
-        """Start the sidecar and return the host-side socket path when it is ready."""
+    def start(self, session: Session) -> Path:
+        """Start the sidecar for the given session and return the host-side socket path when it is ready."""
 
     @abc.abstractmethod
     def stop(self) -> None:

@@ -195,11 +195,11 @@ class FakeProxySidecar(ProxySidecar):
 
     def __init__(self, host_socket: Path | None = None) -> None:
         self._host_socket = host_socket or Path("/tmp/fake-proxy/proxy_socket/proxy.sock")
-        self.start_calls: list[Path] = []
+        self.start_calls: list[Session] = []
         self.stop_calls: int = 0
 
-    def start(self, runtime_dir: Path) -> Path:
-        self.start_calls.append(runtime_dir)
+    def start(self, session: Session) -> Path:
+        self.start_calls.append(session)
         return self._host_socket
 
     def stop(self) -> None:
