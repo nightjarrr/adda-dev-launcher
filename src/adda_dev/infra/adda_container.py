@@ -14,9 +14,10 @@ from .window import WindowedRunner
 class AddaPrimaryContainerImpl(AddaPrimaryContainer):
     """AddaPrimaryContainer adapter that drives a ContainerEngine to pull and run the ADDA container."""
 
-    def __init__(self, engine: ContainerEngine, translator: ContractTranslator) -> None:
+    def __init__(self, engine: ContainerEngine, translator: ContractTranslator, cmd_override: tuple[str, ...] = ()) -> None:
         self._engine = engine
         self._translator = translator
+        self._cmd_override = cmd_override
         self._pull_runner = DefaultRunner()
         self._teardown_runner = CapturedOutputRunner()
         self._name: str | None = None
@@ -29,7 +30,15 @@ class AddaPrimaryContainerImpl(AddaPrimaryContainer):
         self._name = session.session_id
         params = self._translator.translate(spec)
         self._engine.pull(self._pull_runner, spec.image).wait()
-        self._engine.run_it(WindowedRunner(window), spec.image, session.session_id, list(params.args), params.env, remove=True)
+        self._engine.run_it(
+            WindowedRunner(window),
+            spec.image,
+            session.session_id,
+            list(params.args),
+            params.env,
+            cmd=list(self._cmd_override) or None,
+            remove=True,
+        )
 
     def stop(self) -> None:
         """Stop and remove the primary container, best-effort."""
