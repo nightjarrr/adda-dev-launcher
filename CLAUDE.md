@@ -15,7 +15,7 @@ The launcher code and its companion templates live in the `launcher/` directory.
 ```
 src/adda_dev/            # Python package source
   __init__.py            # package root
-  cli.py                 # Typer CLI entry point
+  infra/cli.py           # Typer CLI entry point and composition root
   data/                  # bundled data files
     envoy.yaml.template  # Envoy proxy sidecar template (copied from launcher/)
     adda-dev.tmux.conf   # tmux session configuration (copied from launcher/)
