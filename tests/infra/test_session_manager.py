@@ -2,20 +2,17 @@
 Tests for adda_dev.infra.session: DirectWindow and DirectSessionManager.
 """
 
-from pathlib import Path
-
 import pytest
 
-from adda_dev.domain.contract import ContractSpecDraft
+from adda_dev.domain.contract import ContractSpec, ContractSpecDraft
 from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicBackend, LlmBackend
 from adda_dev.domain.process import ProcessHandle
 from adda_dev.domain.project import Project
 from adda_dev.domain.session_manager import Window
 from adda_dev.domain.tmpfs import TmpfsSizes
-from adda_dev.infra.contract import DockerContractTranslator
 from adda_dev.infra.session import DirectSessionManager, DirectWindow
-from tests.conftest import FakeContainerEngine, FakeOutput, FakeProxySidecar, FakeSecretSource, FakeSessionRepository
+from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSecretSource, FakeSessionRepository
 
 
 class _FakeProcessHandle(ProcessHandle):
@@ -30,11 +27,6 @@ class _FakeProcessHandle(ProcessHandle):
 
     def stderr(self) -> str:
         return ""
-
-
-class _FakeProcessRunner:
-    def run(self, cmd: list[str], env: dict | None = None) -> ProcessHandle:
-        return _FakeProcessHandle()
 
 
 class _FakeWindow(Window):
@@ -79,16 +71,16 @@ def _make_draft(issue_id: int | None = None) -> ContractSpecDraft:
 def _make_manager(
     repo: FakeSessionRepository | None = None,
     sidecar: FakeProxySidecar | None = None,
+    container: FakeAddaPrimaryContainer | None = None,
 ) -> _FakeWindowManager:
     repo = repo or FakeSessionRepository()
     sidecar = sidecar or FakeProxySidecar()
-    return _FakeWindowManager(  # type: ignore[arg-type]
+    container = container or FakeAddaPrimaryContainer()
+    return _FakeWindowManager(
         repo,
-        DockerContractTranslator(),
-        FakeContainerEngine(),
-        _FakeProcessRunner(),  # type: ignore[arg-type]
         FakeOutput(),
         sidecar,
+        container,
     )
 
 
@@ -143,55 +135,39 @@ def test_directwindow_close_without_open_is_noop() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_directsessionmanager_launch_calls_repo_create_with_project_name(tmp_path: Path, monkeypatch: object) -> None:
-    import adda_dev.infra.contract as _mod
-
-    tz_file = tmp_path / "timezone"
-    tz_file.write_text("UTC\n")
-    # monkeypatch timezone so _detect_tz doesn't fail in CI
-    original = _mod._ETC_TIMEZONE  # type: ignore[attr-defined]
-    _mod._ETC_TIMEZONE = tz_file  # type: ignore[attr-defined]
-    try:
-        repo = FakeSessionRepository()
-        manager = _make_manager(repo)
-        draft = _make_draft()
-        manager._launch("my-project", draft)
-        assert any(s.project_name == "my-project" for s in repo._sessions.values())
-    finally:
-        _mod._ETC_TIMEZONE = original  # type: ignore[attr-defined]
+def test_directsessionmanager_launch_calls_repo_create_with_project_name() -> None:
+    repo = FakeSessionRepository()
+    manager = _make_manager(repo)
+    draft = _make_draft()
+    manager._launch("my-project", draft)
+    assert any(s.project_name == "my-project" for s in repo._sessions.values())
 
 
-def test_directsessionmanager_launch_does_not_call_repo_delete(tmp_path: Path) -> None:
-    import adda_dev.infra.contract as _mod
-
-    tz_file = tmp_path / "timezone"
-    tz_file.write_text("UTC\n")
-    original = _mod._ETC_TIMEZONE
-    _mod._ETC_TIMEZONE = tz_file
-    try:
-        repo = FakeSessionRepository()
-        manager = _make_manager(repo)
-        manager._launch("my-project", _make_draft())
-        assert len(repo.deleted) == 0
-    finally:
-        _mod._ETC_TIMEZONE = original
+def test_directsessionmanager_launch_does_not_call_repo_delete() -> None:
+    repo = FakeSessionRepository()
+    manager = _make_manager(repo)
+    manager._launch("my-project", _make_draft())
+    assert len(repo.deleted) == 0
 
 
-def test_directsessionmanager_launch_with_issue_id_creates_session(tmp_path: Path) -> None:
-    import adda_dev.infra.contract as _mod
+def test_directsessionmanager_launch_with_issue_id_creates_session() -> None:
+    repo = FakeSessionRepository()
+    manager = _make_manager(repo)
+    manager._launch("my-project", _make_draft(issue_id=42))
+    sessions = list(repo._sessions.values())
+    assert sessions[0].issue_id == 42
 
-    tz_file = tmp_path / "timezone"
-    tz_file.write_text("UTC\n")
-    original = _mod._ETC_TIMEZONE
-    _mod._ETC_TIMEZONE = tz_file
-    try:
-        repo = FakeSessionRepository()
-        manager = _make_manager(repo)
-        manager._launch("my-project", _make_draft(issue_id=42))
-        sessions = list(repo._sessions.values())
-        assert sessions[0].issue_id == 42
-    finally:
-        _mod._ETC_TIMEZONE = original
+
+def test_directsessionmanager_launch_starts_container() -> None:
+    """_launch must call container.start with the created session and finalized spec."""
+    repo = FakeSessionRepository()
+    container = FakeAddaPrimaryContainer()
+    manager = _make_manager(repo=repo, container=container)
+    manager._launch("my-project", _make_draft())
+    assert len(container.start_calls) == 1
+    session, spec, _runner = container.start_calls[0]
+    assert session.project_name == "my-project"
+    assert isinstance(spec, ContractSpec)
 
 
 # ---------------------------------------------------------------------------
@@ -199,27 +175,16 @@ def test_directsessionmanager_launch_with_issue_id_creates_session(tmp_path: Pat
 # ---------------------------------------------------------------------------
 
 
-def test_directsessionmanager_terminate_calls_repo_delete(tmp_path: Path) -> None:
-    import adda_dev.infra.contract as _mod
-
-    tz_file = tmp_path / "timezone"
-    tz_file.write_text("UTC\n")
-    original = _mod._ETC_TIMEZONE
-    _mod._ETC_TIMEZONE = tz_file
-    try:
-        repo = FakeSessionRepository()
-        manager = _make_manager(repo)
-        manager._launch("my-project", _make_draft())
-        session_id = list(repo._sessions.keys())[0]
-        manager._terminate()
-        assert session_id in repo.deleted
-    finally:
-        _mod._ETC_TIMEZONE = original
+def test_directsessionmanager_terminate_calls_repo_delete() -> None:
+    repo = FakeSessionRepository()
+    manager = _make_manager(repo)
+    manager._launch("my-project", _make_draft())
+    session_id = list(repo._sessions.keys())[0]
+    manager._terminate()
+    assert session_id in repo.deleted
 
 
-def test_directsessionmanager_terminate_closes_windows(tmp_path: Path) -> None:
-    import adda_dev.infra.contract as _mod
-
+def test_directsessionmanager_terminate_closes_windows() -> None:
     closed: list[str] = []
 
     class _TrackingWindow(_FakeWindow):
@@ -230,42 +195,33 @@ def test_directsessionmanager_terminate_closes_windows(tmp_path: Path) -> None:
         def create_window(self, name: str) -> _TrackingWindow:
             return _TrackingWindow(name)
 
-    tz_file = tmp_path / "timezone"
-    tz_file.write_text("UTC\n")
-    original = _mod._ETC_TIMEZONE
-    _mod._ETC_TIMEZONE = tz_file
-    try:
-        repo = FakeSessionRepository()
-        manager = _TrackingManager(  # type: ignore[arg-type]
-            repo,
-            DockerContractTranslator(),
-            FakeContainerEngine(),
-            _FakeProcessRunner(),  # type: ignore[arg-type]
-            FakeOutput(),
-            FakeProxySidecar(),
-        )
-        manager._launch("my-project", _make_draft())
-        manager._terminate()
-        assert len(closed) == 1
-    finally:
-        _mod._ETC_TIMEZONE = original
+    repo = FakeSessionRepository()
+    manager = _TrackingManager(
+        repo,
+        FakeOutput(),
+        FakeProxySidecar(),
+        FakeAddaPrimaryContainer(),
+    )
+    manager._launch("my-project", _make_draft())
+    manager._terminate()
+    assert len(closed) == 1
 
 
-def test_directsessionmanager_terminate_stops_sidecar(tmp_path: Path) -> None:
-    import adda_dev.infra.contract as _mod
+def test_directsessionmanager_terminate_stops_sidecar() -> None:
+    sidecar = FakeProxySidecar()
+    manager = _make_manager(sidecar=sidecar)
+    manager._launch("my-project", _make_draft())
+    manager._terminate()
+    assert sidecar.stop_calls == 1
 
-    tz_file = tmp_path / "timezone"
-    tz_file.write_text("UTC\n")
-    original = _mod._ETC_TIMEZONE
-    _mod._ETC_TIMEZONE = tz_file
-    try:
-        sidecar = FakeProxySidecar()
-        manager = _make_manager(sidecar=sidecar)
-        manager._launch("my-project", _make_draft())
-        manager._terminate()
-        assert sidecar.stop_calls == 1
-    finally:
-        _mod._ETC_TIMEZONE = original
+
+def test_directsessionmanager_terminate_stops_container() -> None:
+    """_terminate must call container.stop after closing windows."""
+    container = FakeAddaPrimaryContainer()
+    manager = _make_manager(container=container)
+    manager._launch("my-project", _make_draft())
+    manager._terminate()
+    assert container.stop_calls == 1
 
 
 def test_directsessionmanager_terminate_without_launch_is_safe() -> None:
@@ -290,16 +246,14 @@ class _FailingLaunchManager(_FakeWindowManager):
         raise RuntimeError("simulated launch failure")
 
 
-def test_sessionmanager_run_calls_terminate_even_when_launch_raises(tmp_path: Path) -> None:
+def test_sessionmanager_run_calls_terminate_even_when_launch_raises() -> None:
     sidecar = FakeProxySidecar()
     repo = FakeSessionRepository()
-    manager = _FailingLaunchManager(  # type: ignore[arg-type]
+    manager = _FailingLaunchManager(
         repo,
-        DockerContractTranslator(),
-        FakeContainerEngine(),
-        _FakeProcessRunner(),  # type: ignore[arg-type]
         FakeOutput(),
         sidecar,
+        FakeAddaPrimaryContainer(),
     )
     with pytest.raises(RuntimeError, match="simulated"):
         manager.run("my-project", _make_draft())

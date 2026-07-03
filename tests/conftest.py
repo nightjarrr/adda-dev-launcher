@@ -5,8 +5,9 @@ pytest configuration.
 from datetime import UTC, datetime
 from pathlib import Path
 
+from adda_dev.domain.adda_container import AddaPrimaryContainer
 from adda_dev.domain.container import ContainerEngine
-from adda_dev.domain.contract import ContractSpecDraft
+from adda_dev.domain.contract import ContractSpec, ContractSpecDraft
 from adda_dev.domain.credentials import SecretError, SecretSource
 from adda_dev.domain.llm import AnthropicBackend, BackendRepository, DeepSeekBackend, LlmBackend
 from adda_dev.domain.process import ProcessHandle, ProcessRunner
@@ -206,6 +207,20 @@ class FakeProxySidecar(ProxySidecar):
         self.stop_calls += 1
 
 
+class FakeAddaPrimaryContainer(AddaPrimaryContainer):
+    """AddaPrimaryContainer test double that records start and stop calls."""
+
+    def __init__(self) -> None:
+        self.start_calls: list[tuple[Session, ContractSpec, ProcessRunner]] = []
+        self.stop_calls: int = 0
+
+    def start(self, session: Session, spec: ContractSpec, runner: ProcessRunner) -> None:
+        self.start_calls.append((session, spec, runner))
+
+    def stop(self) -> None:
+        self.stop_calls += 1
+
+
 class FakeSessionManager(SessionManager):
     """SessionManager test double that records launch and terminate calls without running real processes."""
 
@@ -213,11 +228,9 @@ class FakeSessionManager(SessionManager):
         self._fake_repo = FakeSessionRepository()
         super().__init__(
             self._fake_repo,
-            _FakeContractTranslator(),
-            FakeContainerEngine(),
-            _FakeProcessRunner(),
             FakeOutput(),
             FakeProxySidecar(),
+            FakeAddaPrimaryContainer(),
         )
         self.launched: list[tuple[str, ContractSpecDraft]] = []
         self.terminated: int = 0
@@ -234,13 +247,6 @@ class FakeSessionManager(SessionManager):
         self.terminated += 1
 
 
-class _FakeProcessRunner(ProcessRunner):
-    """ProcessRunner test double that returns a trivial handle without launching a process."""
-
-    def run(self, cmd: list[str], env: dict[str, str] | None = None) -> ProcessHandle:
-        return _FakeProcessHandle()
-
-
 class _FakeWindow(Window):
     """Window test double that records calls without running real processes."""
 
@@ -252,12 +258,3 @@ class _FakeWindow(Window):
 
     def close(self) -> None:
         pass
-
-
-class _FakeContractTranslator:
-    """ContractTranslator test double that returns a fixed no-op command."""
-
-    def translate(self, spec: object) -> object:
-        from adda_dev.domain.contract import ContractProcessParams
-
-        return ContractProcessParams(args=("true",), env={})

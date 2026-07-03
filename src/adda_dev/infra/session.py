@@ -6,11 +6,8 @@ import shutil
 import uuid
 from datetime import UTC, datetime
 
-from ..common import Output, StrictModel
-from ..domain.container import ContainerEngine
-from ..domain.contract import ContractTranslator
-from ..domain.process import ProcessHandle, ProcessRunner
-from ..domain.proxy import ProxySidecar
+from ..common import StrictModel
+from ..domain.process import ProcessHandle
 from ..domain.session import Session, SessionRepository
 from ..domain.session_manager import SessionManager, Window
 from .process import DefaultRunner
@@ -78,17 +75,6 @@ class DirectWindow(Window):
 
 class DirectSessionManager(SessionManager):
     """SessionManager that runs commands directly in the current terminal (no tmux)."""
-
-    def __init__(
-        self,
-        session_repo: SessionRepository,
-        translator: ContractTranslator,
-        engine: ContainerEngine,
-        runner: ProcessRunner,
-        output: Output,
-        sidecar: ProxySidecar,
-    ) -> None:
-        super().__init__(session_repo, translator, engine, runner, output, sidecar)
 
     def create_window(self, name: str) -> Window:
         return DirectWindow(name)
