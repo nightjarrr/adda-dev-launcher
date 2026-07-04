@@ -59,7 +59,7 @@ class AddaPrimaryContainerImpl(AddaPrimaryContainer):
             return
         name = self._name
         try:
-            with self._output.step("Container") as s:
+            with self._output.step("ADDA Dev Runtime") as s:
                 self._engine.stop(self._teardown_runner, name).wait()
                 s.done("stopped")
         except Exception:  # noqa: BLE001
