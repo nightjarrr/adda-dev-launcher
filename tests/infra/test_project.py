@@ -43,7 +43,7 @@ def test_toml_project_repository_threads_source_to_github(tmp_path: Path, monkey
     config_root.mkdir()
     (config_root / "projects").mkdir()
     (config_root / "projects" / "proj.toml").write_text(
-        'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
+        'image = "img:v1"\nprovider = "anthropic"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     proj = TomlProjectRepository(_DEFAULTS, fake).get("proj")

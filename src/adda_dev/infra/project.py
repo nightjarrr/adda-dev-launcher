@@ -34,7 +34,7 @@ class ProjectFileModel(StrictModel):
 
     github: GitHubFileModel
     image: str
-    provider: Annotated[LlmProvider, Field(alias="backend")]
+    provider: LlmProvider
     tmpfs: TmpfsOverride | None = None
 
 
