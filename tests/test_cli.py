@@ -4,6 +4,7 @@ import signal
 from unittest.mock import MagicMock, patch
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from adda_dev.domain.credentials import SecretSource
@@ -11,7 +12,7 @@ from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicBackend, LlmBackend
 from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
-from adda_dev.infra.cli import _terminate_on_sigterm, app
+from adda_dev.infra.cli import _resolve_provider, _terminate_on_sigterm, app
 from adda_dev.infra.config import ContainerEngineChoice
 from adda_dev.infra.container import ContainerEngineUnavailableError
 from adda_dev.infra.llm import LlmConfig
@@ -300,3 +301,115 @@ def test_terminate_on_sigterm_raises_systemexit_143() -> None:
     with pytest.raises(SystemExit) as exc_info:
         _terminate_on_sigterm(signal.SIGTERM, None)
     assert exc_info.value.code == 143
+
+
+# ---------------------------------------------------------------------------
+# _resolve_provider — unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_provider_both_shorthands_raises_bad_parameter() -> None:
+    with pytest.raises(typer.BadParameter):
+        _resolve_provider(None, anthropic=True, deepseek=True)
+
+
+def test_resolve_provider_provider_and_shorthand_raises_bad_parameter() -> None:
+    with pytest.raises(typer.BadParameter):
+        _resolve_provider(LlmBackend.anthropic, anthropic=True, deepseek=False)
+
+
+def test_resolve_provider_anthropic_shorthand_returns_anthropic() -> None:
+    result = _resolve_provider(None, anthropic=True, deepseek=False)
+    assert result == LlmBackend.anthropic
+
+
+def test_resolve_provider_deepseek_shorthand_returns_deepseek() -> None:
+    result = _resolve_provider(None, anthropic=False, deepseek=True)
+    assert result == LlmBackend.deepseek
+
+
+def test_resolve_provider_provider_flag_returns_value() -> None:
+    result = _resolve_provider(LlmBackend.deepseek, anthropic=False, deepseek=False)
+    assert result == LlmBackend.deepseek
+
+
+def test_resolve_provider_no_flags_returns_none() -> None:
+    result = _resolve_provider(None, anthropic=False, deepseek=False)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# run — provider flags
+# ---------------------------------------------------------------------------
+
+
+def _make_provider_patch_context() -> tuple[MagicMock, ...]:
+    """Return patch context managers for a full happy-path run."""
+    fake = FakeSecretSource(
+        {
+            ("adda-dev:github", "demo-token"): "ghp_secret_token",
+            ("adda-dev:anthropic", "oauth"): "claude_oauth_token",
+        }
+    )
+    mock_config = _make_mock_config()
+    mock_project_repo = MagicMock()
+    mock_project_repo.get.return_value = _make_project(fake)
+    mock_backend_repo = MagicMock()
+    mock_backend_repo.get.return_value = _make_backend(fake)
+    mock_session_manager = MagicMock()
+    fake_engine = FakeContainerEngine()
+
+    return (
+        patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
+        patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
+        patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
+        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
+    )
+
+
+def test_run_provider_anthropic_exits_0() -> None:
+    patches = _make_provider_patch_context()
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        result = runner.invoke(app, ["run", "demo", "--provider", "anthropic"])
+    assert result.exit_code == 0
+
+
+def test_run_provider_deepseek_exits_0() -> None:
+    patches = _make_provider_patch_context()
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        result = runner.invoke(app, ["run", "demo", "--provider", "deepseek"])
+    assert result.exit_code == 0
+
+
+def test_run_anthropic_shorthand_exits_0() -> None:
+    patches = _make_provider_patch_context()
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        result = runner.invoke(app, ["run", "demo", "--anthropic"])
+    assert result.exit_code == 0
+
+
+def test_run_deepseek_shorthand_exits_0() -> None:
+    patches = _make_provider_patch_context()
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        result = runner.invoke(app, ["run", "demo", "--deepseek"])
+    assert result.exit_code == 0
+
+
+def test_run_both_shorthands_exits_nonzero_with_error_message() -> None:
+    result = runner.invoke(app, ["run", "demo", "--anthropic", "--deepseek"])
+    assert result.exit_code != 0
+    assert result.output != ""
+
+
+def test_run_provider_and_shorthand_exits_nonzero_with_error_message() -> None:
+    result = runner.invoke(app, ["run", "demo", "--provider", "anthropic", "--anthropic"])
+    assert result.exit_code != 0
+    assert result.output != ""
+
+
+def test_run_no_provider_flag_exits_0() -> None:
+    patches = _make_provider_patch_context()
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        result = runner.invoke(app, ["run", "demo"])
+    assert result.exit_code == 0

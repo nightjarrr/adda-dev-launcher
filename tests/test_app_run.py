@@ -2,7 +2,7 @@
 
 import pytest
 
-from adda_dev.app.run import run_session
+from adda_dev.app.run import RunOptions, run_session
 from adda_dev.domain.contract import ContractSpecDraft
 from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicBackend, LlmBackend
@@ -55,7 +55,7 @@ def test_run_session_output_includes_project_name() -> None:
     session_manager = FakeSessionManager()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output, RunOptions())
 
     assert any("demo" in msg for msg in output.info_calls)
 
@@ -69,7 +69,7 @@ def test_run_session_output_includes_image() -> None:
     session_manager = FakeSessionManager()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output, RunOptions())
 
     assert any("ghcr.io" in msg for msg in output.info_calls)
 
@@ -83,7 +83,7 @@ def test_run_session_output_includes_backend() -> None:
     session_manager = FakeSessionManager()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output, RunOptions())
 
     assert any("anthropic" in msg for msg in output.info_calls)
 
@@ -102,7 +102,7 @@ def test_run_session_calls_run_with_draft() -> None:
     session_manager = FakeSessionManager()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output, RunOptions())
 
     assert len(session_manager.launched) == 1
     assert session_manager.launched[0][0] == "demo"
@@ -118,7 +118,7 @@ def test_run_session_calls_terminate_after_launch() -> None:
     session_manager = FakeSessionManager()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, session_manager, output)
+    run_session("demo", project_repo, backend_repo, session_manager, output, RunOptions())
 
     assert session_manager.terminated == 1
 
@@ -132,9 +132,55 @@ def test_run_session_launch_passes_issue_id_in_draft() -> None:
     session_manager = FakeSessionManager()
     output = FakeOutput()
 
-    run_session("demo", project_repo, backend_repo, session_manager, output, issue_id=42)
+    run_session("demo", project_repo, backend_repo, session_manager, output, RunOptions(issue_id=42))
 
     assert session_manager.launched[0][1].issue_id == 42
+
+
+# ---------------------------------------------------------------------------
+# run_session — provider override
+# ---------------------------------------------------------------------------
+
+
+def test_run_session_provider_override_uses_specified_backend() -> None:
+    from adda_dev.domain.llm import DeepSeekBackend
+
+    source = _make_fake_source()
+    project = _make_project(source)
+    anthropic_backend = _make_backend(source)
+    deepseek_backend = DeepSeekBackend(
+        secret_name="deepseek-key",
+        base_url="https://api.deepseek.com",
+        model="deepseek-chat",
+        opus_model="deepseek-chat",
+        sonnet_model="deepseek-chat",
+        haiku_model="deepseek-chat",
+        subagent_model="deepseek-chat",
+        effort_level="high",
+        source=source,
+    )
+    project_repo = FakeProjectRepository({"demo": project})
+    backend_repo = FakeBackendRepository({LlmBackend.anthropic: anthropic_backend, LlmBackend.deepseek: deepseek_backend})
+    session_manager = FakeSessionManager()
+    output = FakeOutput()
+
+    run_session("demo", project_repo, backend_repo, session_manager, output, RunOptions(provider=LlmBackend.deepseek))
+
+    assert any("deepseek" in msg for msg in output.info_calls)
+
+
+def test_run_session_provider_none_falls_back_to_project_backend() -> None:
+    source = _make_fake_source()
+    project = _make_project(source)
+    backend = _make_backend(source)
+    project_repo = FakeProjectRepository({"demo": project})
+    backend_repo = FakeBackendRepository({LlmBackend.anthropic: backend})
+    session_manager = FakeSessionManager()
+    output = FakeOutput()
+
+    run_session("demo", project_repo, backend_repo, session_manager, output, RunOptions(provider=None))
+
+    assert any("anthropic" in msg for msg in output.info_calls)
 
 
 # ---------------------------------------------------------------------------

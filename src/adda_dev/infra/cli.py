@@ -7,8 +7,9 @@ from types import FrameType
 
 import typer
 
-from ..app.run import run_session
+from ..app.run import RunOptions, run_session
 from ..common import AddaDevError
+from ..domain.llm import LlmBackend
 from .adda_container import AddaPrimaryContainerImpl
 from .config import load_app_config
 from .container import create_engine
@@ -19,6 +20,18 @@ from .output import RichOutput
 from .project import TomlProjectRepository
 from .proxy import EnvoySidecar
 from .session import DirectSessionManager, FsSessionRepository
+
+
+def _resolve_provider(provider: LlmBackend | None, anthropic: bool, deepseek: bool) -> LlmBackend | None:
+    if anthropic and deepseek:
+        raise typer.BadParameter("--anthropic and --deepseek are mutually exclusive")
+    if provider is not None and (anthropic or deepseek):
+        raise typer.BadParameter("--provider cannot be combined with --anthropic or --deepseek")
+    if anthropic:
+        return LlmBackend.anthropic
+    if deepseek:
+        return LlmBackend.deepseek
+    return provider
 
 
 def _terminate_on_sigterm(signum: int, frame: FrameType | None) -> None:
@@ -39,9 +52,13 @@ def run(
     ctx: typer.Context,
     project_name: str = typer.Argument(..., help="Project name from the registry"),
     issue_id: int | None = typer.Option(None, "--issue", help="GitHub issue number"),
+    provider: LlmBackend | None = typer.Option(None, "--provider", help="LLM provider (overrides project file)"),
+    anthropic: bool = typer.Option(False, "--anthropic", help="Shorthand for --provider anthropic"),
+    deepseek: bool = typer.Option(False, "--deepseek", help="Shorthand for --provider deepseek"),
 ) -> None:
     """Start the ADDA Dev Runtime for a project. Pass `-- CMD...` to override the container command."""
     signal.signal(signal.SIGTERM, _terminate_on_sigterm)
+    resolved = _resolve_provider(provider, anthropic, deepseek)
     cmd_override = tuple(ctx.args)
     source = KeyringSecretSource()
     output = RichOutput()
@@ -54,7 +71,8 @@ def run(
         sidecar = EnvoySidecar(engine, config.envoy_image, output)
         container = AddaPrimaryContainerImpl(engine, DockerContractTranslator(), output, cmd_override=cmd_override)
         session_manager = DirectSessionManager(FsSessionRepository(), output, sidecar, container)
-        run_session(project_name, project_repo, backend_repo, session_manager, output, issue_id)
+        options = RunOptions(issue_id=issue_id, provider=resolved)
+        run_session(project_name, project_repo, backend_repo, session_manager, output, options)
     except AddaDevError as exc:
         output.error(exc)
         raise typer.Exit(1)
