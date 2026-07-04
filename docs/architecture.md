@@ -19,26 +19,26 @@ Adjacent documents, by viewpoint:
 
 The launcher is structured using **Onion Architecture** applied to a **domain-driven** model. These are not independent choices — Onion Architecture is the structural mechanism that enforces what domain-driven design requires.
 
-**Domain-driven design** anchors the system's structure in its core problem: launching a configured dev session for a named project. The domain model captures what the system knows about that problem — what a project is, which backends exist, how credentials are scoped — independent of how that knowledge is acquired, stored, or delivered. A `Project` entity is the same object whether assembled from a TOML file, constructed by a test, or produced by a future API; its correctness does not depend on its origin.
+**Domain-driven design** anchors the system's structure in its core problem: launching a configured dev session for a named project. The domain model captures what the system knows about that problem — what a project is, which providers exist, how credentials are scoped — independent of how that knowledge is acquired, stored, or delivered. A `Project` entity is the same object whether assembled from a TOML file, constructed by a test, or produced by a future API; its correctness does not depend on its origin.
 
 **Onion Architecture** enforces this structurally: the codebase is organised as concentric rings with one rule — dependencies always point inward. The domain model sits at the centre; infrastructure (TOML I/O, keyring, CLI delivery) sits at the outside. Infrastructure adapts to the domain; the domain never adapts to infrastructure. This is a structural guarantee, not a convention: a ring violation is a visible cross-ring import.
 
 ### Domain model
 
-The domain for this system is the *session launch*: a named project running in a container image, authenticated against an LLM backend and a GitHub identity, with a configured tmpfs layout.
+The domain for this system is the *session launch*: a named project running in a container image, authenticated against an LLM provider and a GitHub identity, with a configured tmpfs layout.
 
 **Entities** have identity that persists across invocations — they are the aggregate roots, each managed through a repository port:
-- `Project` — identified by name; owns the selection of image, backend, and GitHub identity
+- `Project` — identified by name; owns the selection of image, provider, and GitHub identity
 - `Session` — identified by `session_id`; owns runtime directory lifecycle
 
 **Value objects** are immutable, equal by value, with no independent identity:
 - `TmpfsSizes`, `TmpfsOverride` — the tmpfs layout and its per-project override
 - `GitHub` — GitHub identity and credential-retrieval parameters; owned by `Project`, embedded directly
-- `AnthropicBackend`, `DeepSeekBackend` — LLM credential-retrieval parameters; loaded from host config via `BackendRepository`, not aggregate roots
+- `AnthropicProvider`, `DeepSeekProvider` — LLM credential-retrieval parameters; loaded from host config via `ProviderRepository`, not aggregate roots
 
 **Domain ports** — beyond repository ports, the domain defines several secondary ports: `SecretSource` for credential retrieval by entities (the OS keyring, a test double, or any other source — entities never know which), and `ProxySidecar`, `AddaPrimaryContainer`, `Window`, and `SessionManager` for the session execution and lifecycle layer. The domain owns each contract; infrastructure satisfies it. (Port-to-adapter mapping: §5 Port pattern.)
 
-**Repository ports** — whenever the domain needs to retrieve or manage an aggregate, a repository port is defined in `domain/` and implemented in `infra/`. The domain owns the contract; infrastructure satisfies it. This keeps storage mechanics out of the domain and application rings entirely. Current repository ports: `ProjectRepository`, `BackendRepository`, `SessionRepository`.
+**Repository ports** — whenever the domain needs to retrieve or manage an aggregate, a repository port is defined in `domain/` and implemented in `infra/`. The domain owns the contract; infrastructure satisfies it. This keeps storage mechanics out of the domain and application rings entirely. Current repository ports: `ProjectRepository`, `ProviderRepository`, `SessionRepository`.
 
 Two rules govern the design. First, aggregates reference other aggregates by **identity value**, never by direct object embedding — a value-typed reference (an enum, a name string) acts as the foreign key. The aggregate on the other end is not nested; it is retrieved separately when needed. Second, repositories are **independent** — they do not call each other. The application service is the only place that composes aggregates from multiple repositories; it calls each repository in turn and assembles the result.
 
@@ -73,7 +73,7 @@ Both lifecycle owners are also extensibility surfaces for secondary windows in t
 
 `ContractSpec` is the domain model of the launcher's §1 obligations from `launcher-container-contract.md` — not a command builder, but a typed representation of exactly what the launcher must provide. A value belongs in `ContractSpec` only if it maps to a §1 contract obligation. Values that are contract-mandated defaults (e.g., the hardening booleans `cap_drop_all=True`) are domain field defaults; implementation constants not specified by the contract (e.g., tmpfs option format strings) belong in the infra adapter as private values.
 
-**`ContractSpecDraft` models a temporal dependency.** The proxy socket path is runtime-determined — the sidecar must be running before it is known. `ContractSpecDraft.initialize(project, backend, issue_id)` builds the pre-sidecar shape; `finalize(host_socket)` locks in the socket path and returns the immutable `ContractSpec`. This is why `SessionManager._launch()` starts the sidecar first, captures the returned socket path, and immediately calls `draft.finalize()`.
+**`ContractSpecDraft` models a temporal dependency.** The proxy socket path is runtime-determined — the sidecar must be running before it is known. `ContractSpecDraft.initialize(project, provider, issue_id)` builds the pre-sidecar shape; `finalize(host_socket)` locks in the socket path and returns the immutable `ContractSpec`. This is why `SessionManager._launch()` starts the sidecar first, captures the returned socket path, and immediately calls `draft.finalize()`.
 
 **Secret isolation.** `ContractTranslator.translate()` produces `ContractProcessParams(args, env)`. Secret values must appear only in `env` — never in `args`. `args` carries flag names only (e.g., `--env KEY`); the secret value is injected into the subprocess environment via `env`. All `ContractTranslator` implementations must honor this constraint.
 
@@ -87,7 +87,7 @@ New work is measured against these.
 
 **Domain-driven module boundaries.** Modules are split by concept, not by Python kind. There are no `enums` / `errors` / `constants` catch-all modules: an enum, exception, or constant lives in the module that owns the concept it belongs to. Only genuinely cross-cutting foundations — the root exception and the strict-model base — live in `common`. (Mechanics of when a module becomes a sub-package: `conventions.md`.)
 
-**Open for extension, closed for modification.** New behaviour is added through defined extension points rather than by editing existing code. The LLM backend model is the worked example: a new vendor is a new backend-config subclass plus an enum value and a registry entry — existing backends and the load path are untouched.
+**Open for extension, closed for modification.** New behaviour is added through defined extension points rather than by editing existing code. The LLM provider model is the worked example: a new vendor is a new provider-config subclass plus an enum value and a registry entry — existing providers and the load path are untouched.
 
 **Explicit dependencies, no global state.** Components receive what they need as arguments rather than reaching for ambient state: a project is resolved against the project-defaults it is handed, not a global config object. Storage roots are resolved from XDG env vars at call time rather than injected as path parameters. There are no module-level singletons or shared mutable configuration. The composition root (`infra/cli.py`) is the single place that assembles and wires everything together.
 
@@ -138,7 +138,7 @@ Two distinct kinds of ports appear in this codebase:
 **Domain-defined ports** — the SPI the domain owns. The domain defines the contract; infrastructure satisfies it. No inner ring knows the adapter:
 
 - **Credential retrieval:** `SecretSource` (`domain/credentials.py`) → `KeyringSecretSource` (`infra/keyring_source.py`)
-- **Aggregate retrieval:** `ProjectRepository` (`domain/project.py`) → `TomlProjectRepository` (`infra/project.py`); `BackendRepository` (`domain/llm.py`) → `LlmConfigBackendRepository` (`infra/llm.py`); `SessionRepository` (`domain/session.py`) → `FsSessionRepository` (`infra/session.py`)
+- **Aggregate retrieval:** `ProjectRepository` (`domain/project.py`) → `TomlProjectRepository` (`infra/project.py`); `ProviderRepository` (`domain/llm.py`) → `LlmConfigProviderRepository` (`infra/llm.py`); `SessionRepository` (`domain/session.py`) → `FsSessionRepository` (`infra/session.py`)
 - **Output delivery:** `Output` Protocol (`common.py`) → `RichOutput` (`infra/output.py`)
 - **Proxy sidecar:** `ProxySidecar` (`domain/proxy.py`) → `EnvoySidecar` (`infra/proxy.py`)
 - **Primary container lifecycle:** `AddaPrimaryContainer` (`domain/adda_container.py`) → `AddaPrimaryContainerImpl` (`infra/adda_container.py`)
@@ -168,6 +168,6 @@ Two distinct kinds of ports appear in this codebase:
 
 **The config store and its boundary.** All host state lives under `~/.config/adda-dev/` (XDG; `$XDG_CONFIG_HOME` relocates it — there is no config-directory flag). The `store` module is the persistence boundary: it exposes only the entry point into that folder, safe file-name validation, and TOML loading — it knows no filenames. Each entity owns its own location *within* the store: `AppConfig` is the root `config.toml`; a `Project` is an entry in the `projects/` registry. Persistence mechanics stay in one place; layout knowledge stays with the entities that own it.
 
-**Resolution.** A project is resolved by applying its optional overrides onto the host's project-defaults, with the merge logic living on the value object it concerns. Host configuration is optional — absent means built-in defaults; a project is mandatory — absent is an error. A project actively selects its LLM backend: it inherits no default backend and cannot override vendor settings, which are host-wide.
+**Resolution.** A project is resolved by applying its optional overrides onto the host's project-defaults, with the merge logic living on the value object it concerns. Host configuration is optional — absent means built-in defaults; a project is mandatory — absent is an error. A project actively selects its LLM provider: it inherits no default provider and cannot override vendor settings, which are host-wide.
 
 **Errors.** Persistence-level failures are vendor-neutral (parse, schema validation, invalid file name); a domain-level failure (project not found) lives with the domain. All derive from `AddaDevError`, so a single catch at the CLI boundary is sufficient.

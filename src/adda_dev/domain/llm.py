@@ -1,5 +1,5 @@
 """
-LLM backend domain models: enum and credential-bearing frozen dataclasses.
+LLM provider domain models: enum and credential-bearing frozen dataclasses.
 """
 
 import abc
@@ -10,15 +10,15 @@ from typing import ClassVar
 from .credentials import Secret, SecretSource
 
 
-class LlmBackend(StrEnum):
-    """Supported LLM backends."""
+class LlmProvider(StrEnum):
+    """Supported LLM providers."""
 
     anthropic = "anthropic"
     deepseek = "deepseek"
 
 
 @dataclass(frozen=True)
-class AnthropicBackend(Secret):
+class AnthropicProvider(Secret):
     """Anthropic credential and configuration domain model."""
 
     _service: ClassVar[str] = "adda-dev:anthropic"
@@ -28,7 +28,7 @@ class AnthropicBackend(Secret):
 
 
 @dataclass(frozen=True)
-class DeepSeekBackend(Secret):
+class DeepSeekProvider(Secret):
     """DeepSeek credential and configuration domain model."""
 
     _service: ClassVar[str] = "adda-dev:deepseek"
@@ -44,8 +44,8 @@ class DeepSeekBackend(Secret):
     source: SecretSource
 
 
-class BackendRepository(abc.ABC):
-    """Secondary port for retrieving backend aggregates by LlmBackend identity."""
+class ProviderRepository(abc.ABC):
+    """Secondary port for retrieving provider aggregates by LlmProvider identity."""
 
     @abc.abstractmethod
-    def get(self, backend: LlmBackend) -> AnthropicBackend | DeepSeekBackend: ...
+    def get(self, provider: LlmProvider) -> AnthropicProvider | DeepSeekProvider: ...

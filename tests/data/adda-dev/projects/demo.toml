@@ -1,5 +1,5 @@
 image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"
-backend = "deepseek"
+provider = "deepseek"
 
 [github]
 owner = "nightjarrr"

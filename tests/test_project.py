@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from adda_dev.domain.github import GitHub
-from adda_dev.domain.llm import LlmBackend
+from adda_dev.domain.llm import LlmProvider
 from adda_dev.domain.project import ProjectNotFoundError
 from adda_dev.infra.config import ProjectDefaults
 from adda_dev.infra.project import PROJECTS_DIR_NAME, ProjectFileModel, TomlProjectRepository
@@ -38,14 +38,14 @@ def _valid_file_data() -> dict[str, object]:
     return {
         "github": {"owner": "nightjarrr", "repo": "adda-dev-launcher", "secret_name": "demo-token"},
         "image": "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0",
-        "backend": "deepseek",
+        "provider": "deepseek",
     }
 
 
 def test_project_file_model_valid_minimal() -> None:
     pf = ProjectFileModel.model_validate(_valid_file_data())
     assert pf.github.owner == "nightjarrr"
-    assert pf.backend == LlmBackend.deepseek
+    assert pf.provider == LlmProvider.deepseek
     assert pf.tmpfs is None
 
 
@@ -65,9 +65,9 @@ def test_project_file_model_missing_github_rejected() -> None:
         ProjectFileModel.model_validate(data)
 
 
-def test_project_file_model_missing_backend_rejected() -> None:
+def test_project_file_model_missing_provider_rejected() -> None:
     data = _valid_file_data()
-    del data["backend"]
+    del data["provider"]
     with pytest.raises(Exception):
         ProjectFileModel.model_validate(data)
 
@@ -86,9 +86,9 @@ def test_project_file_model_unknown_key_rejected() -> None:
         ProjectFileModel.model_validate(data)
 
 
-def test_project_file_model_invalid_backend_rejected() -> None:
+def test_project_file_model_invalid_provider_rejected() -> None:
     data = _valid_file_data()
-    data["backend"] = "openai"
+    data["provider"] = "openai"
     with pytest.raises(Exception):
         ProjectFileModel.model_validate(data)
 
@@ -103,7 +103,7 @@ def test_toml_project_repository_no_tmpfs_override_uses_defaults(tmp_path: Path,
     config_root.mkdir()
     (config_root / "projects").mkdir()
     (config_root / "projects" / "demo.toml").write_text(
-        'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
+        'image = "img:v1"\nprovider = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     proj = _repo(_CUSTOM_DEFAULTS).get("demo")
@@ -119,7 +119,7 @@ def test_toml_project_repository_no_tmpfs_override_uses_builtin_defaults(
     config_root.mkdir()
     (config_root / "projects").mkdir()
     (config_root / "projects" / "demo.toml").write_text(
-        'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
+        'image = "img:v1"\nprovider = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     proj = _repo().get("demo")
@@ -138,7 +138,7 @@ def test_toml_project_repository_full_tmpfs_override(tmp_path: Path, monkeypatch
     config_root.mkdir()
     (config_root / "projects").mkdir()
     (config_root / "projects" / "demo.toml").write_text(
-        'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
+        'image = "img:v1"\nprovider = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
         '[tmpfs]\nhome = "2g"\nworkspace = "1g"\ntmp = "512m"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
@@ -158,7 +158,7 @@ def test_toml_project_repository_partial_tmpfs_override_workspace_only(tmp_path:
     config_root.mkdir()
     (config_root / "projects").mkdir()
     (config_root / "projects" / "demo.toml").write_text(
-        'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
+        'image = "img:v1"\nprovider = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
         '[tmpfs]\nworkspace = "2g"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
@@ -173,7 +173,7 @@ def test_toml_project_repository_partial_tmpfs_override_home_only(tmp_path: Path
     config_root.mkdir()
     (config_root / "projects").mkdir()
     (config_root / "projects" / "demo.toml").write_text(
-        'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n[tmpfs]\nhome = "4g"\n'
+        'image = "img:v1"\nprovider = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n[tmpfs]\nhome = "4g"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     proj = _repo().get("demo")
@@ -192,7 +192,7 @@ def test_toml_project_repository_github_fields(tmp_path: Path, monkeypatch: pyte
     config_root.mkdir()
     (config_root / "projects").mkdir()
     (config_root / "projects" / "myproj.toml").write_text(
-        'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\nbackend = "deepseek"\n'
+        'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\nprovider = "deepseek"\n'
         '[github]\nowner = "nightjarrr"\nrepo = "adda-dev-launcher"\nsecret_name = "demo-token"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
@@ -202,7 +202,7 @@ def test_toml_project_repository_github_fields(tmp_path: Path, monkeypatch: pyte
     assert proj.github.repo == "adda-dev-launcher"
     assert proj.github.secret_name == "demo-token"
     assert proj.image == "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"
-    assert proj.backend == LlmBackend.deepseek
+    assert proj.provider == LlmProvider.deepseek
 
 
 def test_toml_project_repository_constructs_github_domain_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -210,7 +210,7 @@ def test_toml_project_repository_constructs_github_domain_model(tmp_path: Path, 
     config_root.mkdir()
     (config_root / "projects").mkdir()
     (config_root / "projects" / "demo.toml").write_text(
-        'image = "img:v1"\nbackend = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
+        'image = "img:v1"\nprovider = "deepseek"\n[github]\nowner = "a"\nrepo = "b"\nsecret_name = "k"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     proj = _repo().get("demo")
@@ -229,7 +229,7 @@ def test_toml_project_repository_valid(tmp_path: Path, monkeypatch: pytest.Monke
     proj_file = config_root / "projects" / "demo.toml"
     proj_file.write_text(
         'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
-        'backend = "anthropic"\n'
+        'provider = "anthropic"\n'
         "[github]\n"
         'owner = "nightjarrr"\n'
         'repo = "adda-dev-launcher"\n'
@@ -238,7 +238,7 @@ def test_toml_project_repository_valid(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     proj = _repo().get("demo")
     assert proj.name == "demo"
-    assert proj.backend == LlmBackend.anthropic
+    assert proj.provider == LlmProvider.anthropic
     assert proj.tmpfs.home == "512m"
 
 
@@ -246,7 +246,7 @@ def test_toml_project_repository_from_static_fixture(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("XDG_CONFIG_HOME", str(DATA_DIR))
     proj = _repo().get("demo")
     assert proj.name == "demo"
-    assert proj.backend == LlmBackend.deepseek
+    assert proj.provider == LlmProvider.deepseek
     assert proj.tmpfs.workspace == "2g"
     # home and tmp from built-in defaults
     assert proj.tmpfs.home == "512m"
@@ -267,7 +267,7 @@ def test_toml_project_repository_builds_correct_path(tmp_path: Path, monkeypatch
     (config_root / "projects").mkdir()
     proj_file = config_root / "projects" / "myproj.toml"
     proj_file.write_text(
-        'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
+        'image = "img:v1"\nprovider = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     proj = _repo().get("myproj")
@@ -281,14 +281,14 @@ def test_toml_project_repository_uses_projects_dir_name_constant(tmp_path: Path,
     projects_subdir = config_root / PROJECTS_DIR_NAME
     projects_subdir.mkdir()
     (projects_subdir / "alpha.toml").write_text(
-        'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
+        'image = "img:v1"\nprovider = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     proj = _repo().get("alpha")
     assert proj.name == "alpha"
     # A file placed directly under config_root (not in projects/) is not found.
     (config_root / "alpha.toml").write_text(
-        'image = "img:v1"\nbackend = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
+        'image = "img:v1"\nprovider = "anthropic"\n[github]\nowner = "acme"\nrepo = "tool"\nsecret_name = "k"\n'
     )
     with pytest.raises(ProjectNotFoundError):
         # Remove the projects/ subdir so the correctly-named file in the wrong place is not found.
@@ -380,7 +380,7 @@ def test_toml_project_repository_unknown_key_raises_schema_validation_error(
     proj_file = config_root / "projects" / "extra.toml"
     proj_file.write_text(
         'image = "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"\n'
-        'backend = "anthropic"\n'
+        'provider = "anthropic"\n'
         'unknown_key = "oops"\n'
         "[github]\n"
         'owner = "nightjarrr"\n'
@@ -397,7 +397,7 @@ def test_toml_project_repository_unknown_key_raises_schema_validation_error(
 # ---------------------------------------------------------------------------
 
 
-def test_toml_project_repository_missing_backend_raises_schema_validation_error(
+def test_toml_project_repository_missing_provider_raises_schema_validation_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_root = tmp_path / "adda-dev"
@@ -434,7 +434,7 @@ def test_integration_app_config_and_toml_project_repository(tmp_path: Path, monk
     proj_file = config_root / "projects" / "myproj.toml"
     proj_file.write_text(
         'image = "ghcr.io/acme/my-repo:v1.0.0"\n'
-        'backend = "anthropic"\n'
+        'provider = "anthropic"\n'
         "[github]\n"
         'owner = "acme"\n'
         'repo = "my-repo"\n'

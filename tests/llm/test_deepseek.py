@@ -1,12 +1,12 @@
 """
-Tests for domain/llm.py: DeepSeekBackend.
+Tests for domain/llm.py: DeepSeekProvider.
 Tests for infra/llm.py: DeepSeekConfigModel.
 """
 
 import pytest
 
 from adda_dev.domain.credentials import SecretError
-from adda_dev.domain.llm import DeepSeekBackend
+from adda_dev.domain.llm import DeepSeekProvider
 from adda_dev.infra.llm import DeepSeekConfigModel
 from tests.conftest import FakeSecretSource
 
@@ -38,13 +38,13 @@ def test_deepseek_config_model_extra_field_rejected() -> None:
 
 
 # ---------------------------------------------------------------------------
-# DeepSeekBackend — construction and get_secret
+# DeepSeekProvider — construction and get_secret
 # ---------------------------------------------------------------------------
 
 
-def _make_deepseek_backend(fake: FakeSecretSource, secret_name: str = "apikey") -> DeepSeekBackend:
+def _make_deepseek_backend(fake: FakeSecretSource, secret_name: str = "apikey") -> DeepSeekProvider:
     cfg = DeepSeekConfigModel(secret_name=secret_name)
-    return DeepSeekBackend(
+    return DeepSeekProvider(
         secret_name=cfg.secret_name,
         base_url=cfg.base_url,
         model=cfg.model,
@@ -60,7 +60,7 @@ def _make_deepseek_backend(fake: FakeSecretSource, secret_name: str = "apikey") 
 def test_deepseek_backend_fields_map_from_config() -> None:
     fake = FakeSecretSource()
     cfg = DeepSeekConfigModel(secret_name="ds-key")
-    backend = DeepSeekBackend(
+    backend = DeepSeekProvider(
         secret_name=cfg.secret_name,
         base_url=cfg.base_url,
         model=cfg.model,
@@ -95,7 +95,7 @@ def test_deepseek_backend_get_secret_raises_on_missing() -> None:
 
 
 def test_deepseek_backend_service_namespace() -> None:
-    assert DeepSeekBackend._service == "adda-dev:deepseek"
+    assert DeepSeekProvider._service == "adda-dev:deepseek"
 
 
 def test_deepseek_backend_frozen() -> None:

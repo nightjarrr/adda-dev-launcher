@@ -13,7 +13,7 @@ from ..domain.contract import (
     ContractSpec,
     ContractTranslator,
 )
-from ..domain.llm import AnthropicBackend, DeepSeekBackend
+from ..domain.llm import AnthropicProvider, DeepSeekProvider
 
 _ETC_TIMEZONE: Path = Path("/etc/timezone")
 _ETC_LOCALTIME: Path = Path("/etc/localtime")
@@ -56,26 +56,26 @@ def _build_env_args(spec: ContractSpec, tz: str) -> tuple[tuple[str, ...], dict[
     args += ["--env", f"ADDA_DEV_PROXY_SOCKET={spec.proxy_socket}"]
     args += ["--env", f"ADDA_DEV_PROXY_PORT={spec.proxy_port}"]
 
-    # Non-secret: backend label and credentials
-    if isinstance(spec.backend, AnthropicBackend):
+    # Non-secret: provider label and credentials
+    if isinstance(spec.provider, AnthropicProvider):
         args += ["--env", "ADDA_DEV_LLM_BACKEND=anthropic"]
-        oauth_token = spec.backend.get_secret()
+        oauth_token = spec.provider.get_secret()
         oauth_key = "CLAUDE_CODE_OAUTH_TOKEN"
         args += ["--env", oauth_key]
         env[oauth_key] = oauth_token
-    elif isinstance(spec.backend, DeepSeekBackend):
+    elif isinstance(spec.provider, DeepSeekProvider):
         args += ["--env", "ADDA_DEV_LLM_BACKEND=deepseek"]
-        args += ["--env", f"ANTHROPIC_BASE_URL={spec.backend.base_url}"]
-        ds_token = spec.backend.get_secret()
+        args += ["--env", f"ANTHROPIC_BASE_URL={spec.provider.base_url}"]
+        ds_token = spec.provider.get_secret()
         ds_key = "ANTHROPIC_AUTH_TOKEN"
         args += ["--env", ds_key]
         env[ds_key] = ds_token
-        args += ["--env", f"ANTHROPIC_MODEL={spec.backend.model}"]
-        args += ["--env", f"ANTHROPIC_DEFAULT_OPUS_MODEL={spec.backend.opus_model}"]
-        args += ["--env", f"ANTHROPIC_DEFAULT_SONNET_MODEL={spec.backend.sonnet_model}"]
-        args += ["--env", f"ANTHROPIC_DEFAULT_HAIKU_MODEL={spec.backend.haiku_model}"]
-        args += ["--env", f"CLAUDE_CODE_SUBAGENT_MODEL={spec.backend.subagent_model}"]
-        args += ["--env", f"CLAUDE_CODE_EFFORT_LEVEL={spec.backend.effort_level}"]
+        args += ["--env", f"ANTHROPIC_MODEL={spec.provider.model}"]
+        args += ["--env", f"ANTHROPIC_DEFAULT_OPUS_MODEL={spec.provider.opus_model}"]
+        args += ["--env", f"ANTHROPIC_DEFAULT_SONNET_MODEL={spec.provider.sonnet_model}"]
+        args += ["--env", f"ANTHROPIC_DEFAULT_HAIKU_MODEL={spec.provider.haiku_model}"]
+        args += ["--env", f"CLAUDE_CODE_SUBAGENT_MODEL={spec.provider.subagent_model}"]
+        args += ["--env", f"CLAUDE_CODE_EFFORT_LEVEL={spec.provider.effort_level}"]
 
     # Non-secret: traffic control and image reference
     args += ["--env", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"]

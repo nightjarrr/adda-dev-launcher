@@ -207,7 +207,7 @@ Authentication spans the launcher (credential retrieval and injection) and the e
 ### Secrets
 
 Two authentication secrets are required:
-* **AI harness credential** — either a Claude Code OAuth token (Anthropic backend) or a DeepSeek API key (DeepSeek backend).
+* **AI harness credential** — either a Claude Code OAuth token (Anthropic provider) or a DeepSeek API key (DeepSeek provider).
 * **GitHub Token** — for repository access.
 
 Both are stored in the host Secret Service keyring, retrieved by the launcher, and injected into the container at startup.
@@ -278,17 +278,17 @@ This section describes how the launcher satisfies its §1 obligations under the 
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | Hardcoded to `1` |
 | `ADDA_DEV_RUNTIME_IMAGE` | Optional; `adda-dev.env` |
 | `ISSUE_ID` | Optional; command-line argument |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Keyring — Anthropic backend; see *Authentication* |
-| `ANTHROPIC_BASE_URL` | DeepSeek backend; `adda-dev.env` |
-| `ANTHROPIC_AUTH_TOKEN` | DeepSeek backend; keyring — see *Authentication* |
-| `ANTHROPIC_MODEL` | DeepSeek backend; `adda-dev.env` |
-| `ANTHROPIC_DEFAULT_OPUS_MODEL` | DeepSeek backend; `adda-dev.env` |
-| `ANTHROPIC_DEFAULT_SONNET_MODEL` | DeepSeek backend; `adda-dev.env` |
-| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | DeepSeek backend; `adda-dev.env` |
-| `CLAUDE_CODE_SUBAGENT_MODEL` | DeepSeek backend; `adda-dev.env` |
-| `CLAUDE_CODE_EFFORT_LEVEL` | DeepSeek backend; `adda-dev.env` |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Keyring — Anthropic provider; see *Authentication* |
+| `ANTHROPIC_BASE_URL` | DeepSeek provider; `adda-dev.env` |
+| `ANTHROPIC_AUTH_TOKEN` | DeepSeek provider; keyring — see *Authentication* |
+| `ANTHROPIC_MODEL` | DeepSeek provider; `adda-dev.env` |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | DeepSeek provider; `adda-dev.env` |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | DeepSeek provider; `adda-dev.env` |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | DeepSeek provider; `adda-dev.env` |
+| `CLAUDE_CODE_SUBAGENT_MODEL` | DeepSeek provider; `adda-dev.env` |
+| `CLAUDE_CODE_EFFORT_LEVEL` | DeepSeek provider; `adda-dev.env` |
 
-Backend credentials are selected by `ADDA_DEV_LLM_BACKEND`: `CLAUDE_CODE_OAUTH_TOKEN` for the Anthropic backend; the eight `ANTHROPIC_*` and `CLAUDE_CODE_*` variables above for the DeepSeek backend.
+Provider credentials are selected by `ADDA_DEV_LLM_BACKEND`: `CLAUDE_CODE_OAUTH_TOKEN` for the Anthropic provider; the eight `ANTHROPIC_*` and `CLAUDE_CODE_*` variables above for the DeepSeek provider.
 
 ### §1.2 Filesystem
 

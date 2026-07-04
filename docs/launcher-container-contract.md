@@ -38,12 +38,12 @@ The launcher provides the following variables; the **Level** is the container's 
 | `TZ` | Enforced | Container timezone. |
 | `ADDA_DEV_PROXY_SOCKET` | Enforced | Container path of the mounted proxy socket. |
 | `ADDA_DEV_PROXY_PORT` | Enforced | Loopback TCP port for the in-container proxy bridge. |
-| `ADDA_DEV_LLM_BACKEND` | Enforced | Harness backend: `anthropic` or `deepseek`. |
+| `ADDA_DEV_LLM_BACKEND` | Enforced | LLM provider: `anthropic` or `deepseek`. |
 | `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | Enforced | Set to `1`. |
 | `ADDA_DEV_RUNTIME_IMAGE` | Optional | Image reference, for display only. |
 | `ISSUE_ID` | Optional | GitHub issue number to resume. |
 
-Backend credentials, selected by `ADDA_DEV_LLM_BACKEND`, are Enforced:
+Provider credentials, selected by `ADDA_DEV_LLM_BACKEND`, are Enforced:
 
 - `anthropic`: `CLAUDE_CODE_OAUTH_TOKEN`.
 - `deepseek`: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`.
