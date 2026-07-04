@@ -11,7 +11,7 @@ from adda_dev.domain.window import Window
 from adda_dev.infra.adda_container import AddaPrimaryContainerImpl
 from adda_dev.infra.process import ProcessHandle, ProcessRunner
 from adda_dev.infra.window import WindowedRunner
-from tests.conftest import FakeContainerEngine
+from tests.conftest import FakeContainerEngine, FakeOutput
 
 _TEST_SESSION_ID = "adda-dev-session-test1234"
 _TEST_IMAGE = "ghcr.io/nightjarrr/adda-dev:v0.1.0"
@@ -92,7 +92,7 @@ class _FixedTranslator(ContractTranslator):
 def test_addaprimarycontainer_start_calls_pull_with_spec_image() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator()
-    impl = AddaPrimaryContainerImpl(engine, translator)
+    impl = AddaPrimaryContainerImpl(engine, translator, FakeOutput())
     impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     pull_calls = [c for c in engine.calls if c[0] == "pull"]
     assert len(pull_calls) == 1
@@ -102,7 +102,7 @@ def test_addaprimarycontainer_start_calls_pull_with_spec_image() -> None:
 def test_addaprimarycontainer_start_calls_run_it() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator()
-    impl = AddaPrimaryContainerImpl(engine, translator)
+    impl = AddaPrimaryContainerImpl(engine, translator, FakeOutput())
     impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     assert len(run_it_calls) == 1
@@ -111,7 +111,7 @@ def test_addaprimarycontainer_start_calls_run_it() -> None:
 def test_addaprimarycontainer_start_run_it_name_equals_session_id() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator()
-    impl = AddaPrimaryContainerImpl(engine, translator)
+    impl = AddaPrimaryContainerImpl(engine, translator, FakeOutput())
     impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     _image, name, _args, _env, _cmd, _remove = run_it_calls[0][1]  # type: ignore[misc]
@@ -121,7 +121,7 @@ def test_addaprimarycontainer_start_run_it_name_equals_session_id() -> None:
 def test_addaprimarycontainer_start_run_it_remove_is_true() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator()
-    impl = AddaPrimaryContainerImpl(engine, translator)
+    impl = AddaPrimaryContainerImpl(engine, translator, FakeOutput())
     impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     _image, _name, _args, _env, _cmd, remove = run_it_calls[0][1]  # type: ignore[misc]
@@ -131,7 +131,7 @@ def test_addaprimarycontainer_start_run_it_remove_is_true() -> None:
 def test_addaprimarycontainer_start_run_it_uses_translator_args_and_env() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator(args=("--custom-arg", "--other"), env={"SECRET": "s"})
-    impl = AddaPrimaryContainerImpl(engine, translator)
+    impl = AddaPrimaryContainerImpl(engine, translator, FakeOutput())
     impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     _image, _name, args, env, _cmd, _remove = run_it_calls[0][1]  # type: ignore[misc]
@@ -142,7 +142,7 @@ def test_addaprimarycontainer_start_run_it_uses_translator_args_and_env() -> Non
 def test_addaprimarycontainer_start_calls_translate_with_spec() -> None:
     engine = FakeContainerEngine()
     translator = _FixedTranslator()
-    impl = AddaPrimaryContainerImpl(engine, translator)
+    impl = AddaPrimaryContainerImpl(engine, translator, FakeOutput())
     spec = _make_spec()
     impl.start(_make_session(), spec, _FakeWindow("w"))
     assert len(translator.translate_calls) == 1
@@ -170,7 +170,7 @@ def test_addaprimarycontainer_start_wraps_window_in_windowed_runner() -> None:
             return _FakeHandle()
 
     engine = _CapturingEngine()
-    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator())
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
     impl.start(_make_session(), _make_spec(), fake_window)
     assert len(captured_runners) == 1
     assert isinstance(captured_runners[0], WindowedRunner)
@@ -184,7 +184,7 @@ def test_addaprimarycontainer_start_wraps_window_in_windowed_runner() -> None:
 
 def test_addaprimarycontainer_stop_before_start_is_noop() -> None:
     engine = FakeContainerEngine()
-    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator())
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
     impl.stop()  # must not raise; _name is None
     assert not any(c[0] in ("stop", "rm") for c in engine.calls)
 
@@ -196,7 +196,7 @@ def test_addaprimarycontainer_stop_before_start_is_noop() -> None:
 
 def test_addaprimarycontainer_stop_after_start_calls_stop_then_rm() -> None:
     engine = FakeContainerEngine()
-    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator())
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
     impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     impl.stop()
     ops = [c[0] for c in engine.calls]
@@ -206,7 +206,7 @@ def test_addaprimarycontainer_stop_after_start_calls_stop_then_rm() -> None:
 
 def test_addaprimarycontainer_stop_rm_uses_force_true() -> None:
     engine = FakeContainerEngine()
-    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator())
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
     impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     impl.stop()
     rm_calls = [c for c in engine.calls if c[0] == "rm"]
@@ -236,13 +236,13 @@ class _RaisingRmEngine(FakeContainerEngine):
 
 
 def test_addaprimarycontainer_stop_swallows_stop_exception() -> None:
-    impl = AddaPrimaryContainerImpl(_RaisingStopEngine(), _FixedTranslator())
+    impl = AddaPrimaryContainerImpl(_RaisingStopEngine(), _FixedTranslator(), FakeOutput())
     impl._name = _TEST_SESSION_ID  # set name directly to skip start()
     impl.stop()  # must not raise
 
 
 def test_addaprimarycontainer_stop_swallows_rm_exception() -> None:
-    impl = AddaPrimaryContainerImpl(_RaisingRmEngine(), _FixedTranslator())
+    impl = AddaPrimaryContainerImpl(_RaisingRmEngine(), _FixedTranslator(), FakeOutput())
     impl._name = _TEST_SESSION_ID  # set name directly to skip start()
     impl.stop()  # must not raise
 
@@ -254,7 +254,7 @@ def test_addaprimarycontainer_stop_swallows_rm_exception() -> None:
 
 def test_addaprimarycontainer_cmd_override_forwarded_to_run_it() -> None:
     engine = FakeContainerEngine()
-    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), cmd_override=("echo", "hi"))
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput(), cmd_override=("echo", "hi"))
     impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     _image, _name, _args, _env, cmd, _remove = run_it_calls[0][1]  # type: ignore[misc]
@@ -263,8 +263,57 @@ def test_addaprimarycontainer_cmd_override_forwarded_to_run_it() -> None:
 
 def test_addaprimarycontainer_cmd_default_is_none_in_run_it() -> None:
     engine = FakeContainerEngine()
-    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator())
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
     impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     run_it_calls = [c for c in engine.calls if c[0] == "run_it"]
     _image, _name, _args, _env, cmd, _remove = run_it_calls[0][1]  # type: ignore[misc]
     assert cmd is None
+
+
+# ---------------------------------------------------------------------------
+# AddaPrimaryContainerImpl — :local image pull skip
+# ---------------------------------------------------------------------------
+
+
+def _make_local_spec() -> ContractSpec:
+    from adda_dev.domain.github import GitHub
+    from adda_dev.domain.llm import AnthropicBackend
+    from adda_dev.domain.tmpfs import TmpfsSizes
+    from tests.conftest import FakeSecretSource
+
+    source = FakeSecretSource({("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "key"): "sk_test"})
+    gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
+    backend = AnthropicBackend(secret_name="key", source=source)
+    return ContractSpec(
+        github=gh,
+        backend=backend,
+        image="ghcr.io/nightjarrr/adda-dev:local",
+        tmpfs=TmpfsSizes(),
+        proxy_socket_host_path=Path("/tmp/fake-proxy.sock"),
+    )
+
+
+def test_addaprimarycontainer_start_skips_pull_for_local_image() -> None:
+    engine = FakeContainerEngine()
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
+    impl.start(_make_session(), _make_local_spec(), _FakeWindow("w"))
+    pull_calls = [c for c in engine.calls if c[0] == "pull"]
+    assert len(pull_calls) == 0
+
+
+def test_addaprimarycontainer_start_emits_info_for_local_image() -> None:
+    engine = FakeContainerEngine()
+    output = FakeOutput()
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), output)
+    impl.start(_make_session(), _make_local_spec(), _FakeWindow("w"))
+    assert len(output.info_calls) > 0
+    assert ":local" in output.info_calls[0]
+
+
+def test_addaprimarycontainer_start_pulls_for_non_local_image() -> None:
+    engine = FakeContainerEngine()
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
+    pull_calls = [c for c in engine.calls if c[0] == "pull"]
+    assert len(pull_calls) == 1
+    assert pull_calls[0][1] == _TEST_IMAGE
