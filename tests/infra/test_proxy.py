@@ -592,8 +592,9 @@ class _FailingPullEngine(FakeContainerEngine):
 def test_envoy_sidecar_start_raises_proxy_error_on_pull_failure(tmp_path: Path) -> None:
     eng = _FailingPullEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
-    with pytest.raises(ProxyError, match="Pull failed"):
+    with pytest.raises(ProxyError) as exc_info:
         sidecar.start(_make_session(tmp_path))
+    assert _FAKE_ENVOY_IMAGE in str(exc_info.value.args[0])
 
 
 def test_envoy_sidecar_stop_rm_uses_force(tmp_path: Path) -> None:

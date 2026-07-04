@@ -262,6 +262,24 @@ def test_richstepcontext_exception_propagates() -> None:
             raise ValueError("propagated")
 
 
+def test_richstepcontext_exception_uses_args0_not_full_str() -> None:
+    # AddaDevError.__str__() returns multi-line text when details are present.
+    # __exit__ must print only args[0] (the bare message), not str(exc_val).
+    from adda_dev.common import AddaDevError
+
+    console, buf = _make_console()
+    ctx = _RichStepContext("my step", console)
+    exc = AddaDevError("bare message")
+    exc.details.append(("--- stderr ---", "lots of extra detail"))
+    with pytest.raises(AddaDevError):
+        with ctx:
+            raise exc
+    content = buf.getvalue()
+    assert "bare message" in content
+    # The multi-line detail block must NOT appear in the step row
+    assert "lots of extra detail" not in content
+
+
 # ---------------------------------------------------------------------------
 # _RichStepContext — __exit__ without exception and without done()
 # ---------------------------------------------------------------------------

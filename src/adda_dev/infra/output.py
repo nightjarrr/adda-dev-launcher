@@ -131,7 +131,8 @@ class _RichStepContext(StepContext):
             self._live.__exit__(exc_type, exc_val, exc_tb)
             self._live = None
         if exc_val is not None:
-            self._print_row("✗", "red", elapsed, str(exc_val))
+            detail = str(exc_val.args[0]) if exc_val.args else str(exc_val)
+            self._print_row("✗", "red", elapsed, detail)
         return False
 
     def _print_row(self, mark: str, color: str, elapsed: float, detail: str) -> None:

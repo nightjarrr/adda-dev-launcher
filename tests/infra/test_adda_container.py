@@ -345,5 +345,6 @@ class _FailingPullEngine(FakeContainerEngine):
 def test_addaprimarycontainer_start_raises_container_error_on_pull_failure() -> None:
     engine = _FailingPullEngine()
     impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
-    with pytest.raises(ContainerError):
+    with pytest.raises(ContainerError) as exc_info:
         impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
+    assert _TEST_IMAGE in str(exc_info.value.args[0])

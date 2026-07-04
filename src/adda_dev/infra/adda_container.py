@@ -43,7 +43,9 @@ class AddaPrimaryContainerImpl(AddaPrimaryContainer):
             else:
                 handle = self._engine.pull(self._pull_runner, spec.image)
                 if handle.wait() != 0:
-                    raise ContainerError("Pull failed", stdout=handle.stdout().strip(), stderr=handle.stderr().strip())
+                    raise ContainerError(
+                        f"Pulling {spec.image} failed", stdout=handle.stdout().strip(), stderr=handle.stderr().strip()
+                    )
                 s.done(f"pulled {spec.image}")
         self._engine.run_it(
             WindowedRunner(window),
