@@ -29,16 +29,16 @@ def _make_session() -> Session:
 
 def _make_spec() -> ContractSpec:
     from adda_dev.domain.github import GitHub
-    from adda_dev.domain.llm import AnthropicBackend
+    from adda_dev.domain.llm import AnthropicProvider
     from adda_dev.domain.tmpfs import TmpfsSizes
     from tests.conftest import FakeSecretSource
 
     source = FakeSecretSource({("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "key"): "sk_test"})
     gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="key", source=source)
+    provider = AnthropicProvider(secret_name="key", source=source)
     return ContractSpec(
         github=gh,
-        backend=backend,
+        provider=provider,
         image=_TEST_IMAGE,
         tmpfs=TmpfsSizes(),
         proxy_socket_host_path=Path("/tmp/fake-proxy.sock"),
@@ -277,16 +277,16 @@ def test_addaprimarycontainer_cmd_default_is_none_in_run_it() -> None:
 
 def _make_local_spec() -> ContractSpec:
     from adda_dev.domain.github import GitHub
-    from adda_dev.domain.llm import AnthropicBackend
+    from adda_dev.domain.llm import AnthropicProvider
     from adda_dev.domain.tmpfs import TmpfsSizes
     from tests.conftest import FakeSecretSource
 
     source = FakeSecretSource({("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "key"): "sk_test"})
     gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="key", source=source)
+    provider = AnthropicProvider(secret_name="key", source=source)
     return ContractSpec(
         github=gh,
-        backend=backend,
+        provider=provider,
         image="ghcr.io/nightjarrr/adda-dev:local",
         tmpfs=TmpfsSizes(),
         proxy_socket_host_path=Path("/tmp/fake-proxy.sock"),

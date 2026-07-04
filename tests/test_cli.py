@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from adda_dev.domain.credentials import SecretSource
 from adda_dev.domain.github import GitHub
-from adda_dev.domain.llm import AnthropicBackend, LlmBackend
+from adda_dev.domain.llm import AnthropicProvider, LlmProvider
 from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
 from adda_dev.infra.cli import _resolve_provider, _terminate_on_sigterm, app
@@ -44,13 +44,13 @@ def _make_project(source: SecretSource) -> Project:
         name="demo",
         github=gh,
         image="ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0",
-        backend=LlmBackend.anthropic,
+        provider=LlmProvider.anthropic,
         tmpfs=TmpfsSizes(),
     )
 
 
-def _make_backend(source: SecretSource) -> AnthropicBackend:
-    return AnthropicBackend(secret_name="oauth", source=source)
+def _make_backend(source: SecretSource) -> AnthropicProvider:
+    return AnthropicProvider(secret_name="oauth", source=source)
 
 
 def _make_mock_config(engine_choice: ContainerEngineChoice = ContainerEngineChoice.docker) -> MagicMock:
@@ -89,7 +89,7 @@ def test_run_displays_project_info_and_exits_0() -> None:
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
         patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
-        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.LlmConfigProviderRepository", return_value=mock_backend_repo),
         patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
     ):
         result = runner.invoke(app, ["run", "demo"])
@@ -119,7 +119,7 @@ def test_run_project_not_found_exits_1() -> None:
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
         patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
-        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=MagicMock()),
+        patch("adda_dev.infra.cli.LlmConfigProviderRepository", return_value=MagicMock()),
         patch("adda_dev.infra.cli.DirectSessionManager", return_value=MagicMock()),
     ):
         result = runner.invoke(app, ["run", "nonexistent"])
@@ -156,7 +156,7 @@ def test_run_with_issue_option_exits_0() -> None:
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
         patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
-        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.LlmConfigProviderRepository", return_value=mock_backend_repo),
         patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
     ):
         result = runner.invoke(app, ["run", "demo", "--issue", "42"])
@@ -223,7 +223,7 @@ def _make_full_patch_context(spy: MagicMock) -> tuple[MagicMock, ...]:
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
         patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
-        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.LlmConfigProviderRepository", return_value=mock_backend_repo),
         patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
         patch("adda_dev.infra.cli.AddaPrimaryContainerImpl", spy),
     )
@@ -284,7 +284,7 @@ def test_run_registers_sigterm_handler() -> None:
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
         patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
-        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.LlmConfigProviderRepository", return_value=mock_backend_repo),
         patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
     ):
         runner.invoke(app, ["run", "demo"])
@@ -315,22 +315,22 @@ def test_resolve_provider_both_shorthands_raises_bad_parameter() -> None:
 
 def test_resolve_provider_provider_and_shorthand_raises_bad_parameter() -> None:
     with pytest.raises(typer.BadParameter):
-        _resolve_provider(LlmBackend.anthropic, anthropic=True, deepseek=False)
+        _resolve_provider(LlmProvider.anthropic, anthropic=True, deepseek=False)
 
 
 def test_resolve_provider_anthropic_shorthand_returns_anthropic() -> None:
     result = _resolve_provider(None, anthropic=True, deepseek=False)
-    assert result == LlmBackend.anthropic
+    assert result == LlmProvider.anthropic
 
 
 def test_resolve_provider_deepseek_shorthand_returns_deepseek() -> None:
     result = _resolve_provider(None, anthropic=False, deepseek=True)
-    assert result == LlmBackend.deepseek
+    assert result == LlmProvider.deepseek
 
 
 def test_resolve_provider_provider_flag_returns_value() -> None:
-    result = _resolve_provider(LlmBackend.deepseek, anthropic=False, deepseek=False)
-    assert result == LlmBackend.deepseek
+    result = _resolve_provider(LlmProvider.deepseek, anthropic=False, deepseek=False)
+    assert result == LlmProvider.deepseek
 
 
 def test_resolve_provider_no_flags_returns_none() -> None:
@@ -363,7 +363,7 @@ def _make_provider_patch_context() -> tuple[MagicMock, ...]:
         patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
         patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
         patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
-        patch("adda_dev.infra.cli.LlmConfigBackendRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.LlmConfigProviderRepository", return_value=mock_backend_repo),
         patch("adda_dev.infra.cli.DirectSessionManager", return_value=mock_session_manager),
     )
 

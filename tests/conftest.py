@@ -8,7 +8,7 @@ from pathlib import Path
 from adda_dev.domain.adda_container import AddaPrimaryContainer
 from adda_dev.domain.contract import ContractSpec, ContractSpecDraft
 from adda_dev.domain.credentials import SecretError, SecretSource
-from adda_dev.domain.llm import AnthropicBackend, BackendRepository, DeepSeekBackend, LlmBackend
+from adda_dev.domain.llm import AnthropicProvider, DeepSeekProvider, LlmProvider, ProviderRepository
 from adda_dev.domain.project import Project, ProjectNotFoundError, ProjectRepository
 from adda_dev.domain.proxy import ProxySidecar
 from adda_dev.domain.session import Session, SessionRepository
@@ -61,14 +61,14 @@ class FakeProjectRepository(ProjectRepository):
         return self._projects[name]
 
 
-class FakeBackendRepository(BackendRepository):
-    """BackendRepository test double backed by a dict."""
+class FakeProviderRepository(ProviderRepository):
+    """ProviderRepository test double backed by a dict."""
 
-    def __init__(self, backends: dict[LlmBackend, AnthropicBackend | DeepSeekBackend]) -> None:
-        self._backends = backends
+    def __init__(self, providers: dict[LlmProvider, AnthropicProvider | DeepSeekProvider]) -> None:
+        self._providers = providers
 
-    def get(self, backend: LlmBackend) -> AnthropicBackend | DeepSeekBackend:
-        return self._backends[backend]
+    def get(self, provider: LlmProvider) -> AnthropicProvider | DeepSeekProvider:
+        return self._providers[provider]
 
 
 class FakeSessionRepository(SessionRepository):

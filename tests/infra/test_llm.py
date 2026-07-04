@@ -1,13 +1,13 @@
 """
-Tests for infra/llm.py: AnthropicConfigModel, DeepSeekConfigModel, LlmConfigBackendRepository.
+Tests for infra/llm.py: AnthropicConfigModel, DeepSeekConfigModel, LlmConfigProviderRepository.
 """
 
-from adda_dev.domain.llm import AnthropicBackend, DeepSeekBackend, LlmBackend
+from adda_dev.domain.llm import AnthropicProvider, DeepSeekProvider, LlmProvider
 from adda_dev.infra.llm import (
     AnthropicConfigModel,
     DeepSeekConfigModel,
     LlmConfig,
-    LlmConfigBackendRepository,
+    LlmConfigProviderRepository,
 )
 from tests.conftest import FakeSecretSource
 
@@ -44,54 +44,54 @@ def test_deepseek_config_model_defaults() -> None:
 
 
 # ---------------------------------------------------------------------------
-# LlmConfigBackendRepository.get — anthropic
+# LlmConfigProviderRepository.get — anthropic
 # ---------------------------------------------------------------------------
 
 
 def test_llm_config_backend_repository_anthropic_injects_source() -> None:
     fake = FakeSecretSource()
-    repo = LlmConfigBackendRepository(LlmConfig(), fake)
-    result = repo.get(LlmBackend.anthropic)
-    assert isinstance(result, AnthropicBackend)
+    repo = LlmConfigProviderRepository(LlmConfig(), fake)
+    result = repo.get(LlmProvider.anthropic)
+    assert isinstance(result, AnthropicProvider)
     assert result.source is fake
 
 
 def test_llm_config_backend_repository_anthropic_uses_config_secret_name() -> None:
     fake = FakeSecretSource()
     cfg = LlmConfig.model_validate({"anthropic": {"secret_name": "custom-oauth"}})
-    repo = LlmConfigBackendRepository(cfg, fake)
-    result = repo.get(LlmBackend.anthropic)
-    assert isinstance(result, AnthropicBackend)
+    repo = LlmConfigProviderRepository(cfg, fake)
+    result = repo.get(LlmProvider.anthropic)
+    assert isinstance(result, AnthropicProvider)
     assert result.secret_name == "custom-oauth"
 
 
 def test_llm_config_backend_repository_anthropic_default_secret_name() -> None:
     fake = FakeSecretSource()
-    repo = LlmConfigBackendRepository(LlmConfig(), fake)
-    result = repo.get(LlmBackend.anthropic)
-    assert isinstance(result, AnthropicBackend)
+    repo = LlmConfigProviderRepository(LlmConfig(), fake)
+    result = repo.get(LlmProvider.anthropic)
+    assert isinstance(result, AnthropicProvider)
     assert result.secret_name == "oauth"
 
 
 # ---------------------------------------------------------------------------
-# LlmConfigBackendRepository.get — deepseek
+# LlmConfigProviderRepository.get — deepseek
 # ---------------------------------------------------------------------------
 
 
 def test_llm_config_backend_repository_deepseek_injects_source() -> None:
     fake = FakeSecretSource()
-    repo = LlmConfigBackendRepository(LlmConfig(), fake)
-    result = repo.get(LlmBackend.deepseek)
-    assert isinstance(result, DeepSeekBackend)
+    repo = LlmConfigProviderRepository(LlmConfig(), fake)
+    result = repo.get(LlmProvider.deepseek)
+    assert isinstance(result, DeepSeekProvider)
     assert result.source is fake
 
 
 def test_llm_config_backend_repository_deepseek_maps_all_fields() -> None:
     fake = FakeSecretSource()
     cfg = LlmConfig.model_validate({"deepseek": {"secret_name": "ds-key"}})
-    repo = LlmConfigBackendRepository(cfg, fake)
-    result = repo.get(LlmBackend.deepseek)
-    assert isinstance(result, DeepSeekBackend)
+    repo = LlmConfigProviderRepository(cfg, fake)
+    result = repo.get(LlmProvider.deepseek)
+    assert isinstance(result, DeepSeekProvider)
     assert result.secret_name == "ds-key"
     assert result.base_url == "https://api.deepseek.com/anthropic"
     assert result.model == "deepseek-v4-flash"
@@ -105,7 +105,7 @@ def test_llm_config_backend_repository_deepseek_maps_all_fields() -> None:
 def test_llm_config_backend_repository_deepseek_uses_config() -> None:
     fake = FakeSecretSource()
     cfg = LlmConfig.model_validate({"deepseek": {"secret_name": "custom-ds"}})
-    repo = LlmConfigBackendRepository(cfg, fake)
-    result = repo.get(LlmBackend.deepseek)
-    assert isinstance(result, DeepSeekBackend)
+    repo = LlmConfigProviderRepository(cfg, fake)
+    result = repo.get(LlmProvider.deepseek)
+    assert isinstance(result, DeepSeekProvider)
     assert result.secret_name == "custom-ds"

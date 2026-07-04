@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from adda_dev.domain.github import GitHub
-from adda_dev.domain.llm import LlmBackend
+from adda_dev.domain.llm import LlmProvider
 from adda_dev.domain.project import ProjectNotFoundError
 from adda_dev.infra.config import ProjectDefaults
 from adda_dev.infra.project import PROJECTS_DIR_NAME, ProjectFileModel, TomlProjectRepository
@@ -45,7 +45,7 @@ def _valid_file_data() -> dict[str, object]:
 def test_project_file_model_valid_minimal() -> None:
     pf = ProjectFileModel.model_validate(_valid_file_data())
     assert pf.github.owner == "nightjarrr"
-    assert pf.backend == LlmBackend.deepseek
+    assert pf.provider == LlmProvider.deepseek
     assert pf.tmpfs is None
 
 
@@ -202,7 +202,7 @@ def test_toml_project_repository_github_fields(tmp_path: Path, monkeypatch: pyte
     assert proj.github.repo == "adda-dev-launcher"
     assert proj.github.secret_name == "demo-token"
     assert proj.image == "ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0"
-    assert proj.backend == LlmBackend.deepseek
+    assert proj.provider == LlmProvider.deepseek
 
 
 def test_toml_project_repository_constructs_github_domain_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -238,7 +238,7 @@ def test_toml_project_repository_valid(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     proj = _repo().get("demo")
     assert proj.name == "demo"
-    assert proj.backend == LlmBackend.anthropic
+    assert proj.provider == LlmProvider.anthropic
     assert proj.tmpfs.home == "512m"
 
 
@@ -246,7 +246,7 @@ def test_toml_project_repository_from_static_fixture(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("XDG_CONFIG_HOME", str(DATA_DIR))
     proj = _repo().get("demo")
     assert proj.name == "demo"
-    assert proj.backend == LlmBackend.deepseek
+    assert proj.provider == LlmProvider.deepseek
     assert proj.tmpfs.workspace == "2g"
     # home and tmp from built-in defaults
     assert proj.tmpfs.home == "512m"

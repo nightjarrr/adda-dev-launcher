@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from ..common import AddaDevError
 from .github import GitHub
-from .llm import LlmBackend
+from .llm import LlmProvider
 from .tmpfs import TmpfsSizes
 
 
@@ -29,5 +29,5 @@ class Project:
     name: str
     github: GitHub
     image: str
-    backend: LlmBackend
+    provider: LlmProvider
     tmpfs: TmpfsSizes

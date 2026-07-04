@@ -9,7 +9,7 @@ from pydantic import Field
 from ..common import StrictModel
 from ..domain.credentials import SecretSource
 from ..domain.github import GitHub
-from ..domain.llm import LlmBackend
+from ..domain.llm import LlmProvider
 from ..domain.project import Project, ProjectNotFoundError, ProjectRepository
 from ..domain.tmpfs import TmpfsOverride
 from .config import ProjectDefaults
@@ -34,7 +34,7 @@ class ProjectFileModel(StrictModel):
 
     github: GitHubFileModel
     image: str
-    backend: LlmBackend
+    provider: Annotated[LlmProvider, Field(alias="backend")]
     tmpfs: TmpfsOverride | None = None
 
 
@@ -66,6 +66,6 @@ class TomlProjectRepository(ProjectRepository):
             name=name,
             github=_build_github(file.github, self._source),
             image=file.image,
-            backend=file.backend,
+            provider=file.provider,
             tmpfs=self._defaults.tmpfs.with_override(file.tmpfs),
         )

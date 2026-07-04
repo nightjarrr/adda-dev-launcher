@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from ..common import Output
 from ..domain.contract import ContractSpecDraft
-from ..domain.llm import BackendRepository, LlmBackend
+from ..domain.llm import LlmProvider, ProviderRepository
 from ..domain.project import ProjectRepository
 from ..domain.session_manager import SessionManager
 
@@ -14,23 +14,23 @@ from ..domain.session_manager import SessionManager
 @dataclass(frozen=True)
 class RunOptions:
     issue_id: int | None = None
-    provider: LlmBackend | None = None
+    provider: LlmProvider | None = None
 
 
 def run_session(
     project_name: str,
     project_repo: ProjectRepository,
-    backend_repo: BackendRepository,
+    provider_repo: ProviderRepository,
     session_manager: SessionManager,
     output: Output,
     options: RunOptions = RunOptions(),
 ) -> None:
-    """Retrieve project and backend config, launch a session, and block until the primary process exits."""
+    """Retrieve project and provider config, launch a session, and block until the primary process exits."""
     project = project_repo.get(project_name)
-    resolved_provider = options.provider or project.backend
-    backend = backend_repo.get(resolved_provider)
+    resolved_provider = options.provider or project.provider
+    provider = provider_repo.get(resolved_provider)
     output.info(f"Project:  {project.name}")
     output.info(f"Image:    {project.image}")
-    output.info(f"Backend:  {resolved_provider.value}")
-    draft = ContractSpecDraft.initialize(project, backend, options.issue_id)
+    output.info(f"Provider: {resolved_provider.value}")
+    draft = ContractSpecDraft.initialize(project, provider, options.issue_id)
     session_manager.run(project_name, draft)

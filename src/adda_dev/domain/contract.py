@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ..common import AddaDevError
 from .github import GitHub
-from .llm import AnthropicBackend, DeepSeekBackend
+from .llm import AnthropicProvider, DeepSeekProvider
 from .project import Project
 from .tmpfs import TmpfsSizes
 
@@ -29,7 +29,7 @@ class ContractSpec:
     """Launcher obligations for a single container run, mapping 1:1 to §1 of the contract doc."""
 
     github: GitHub
-    backend: AnthropicBackend | DeepSeekBackend
+    provider: AnthropicProvider | DeepSeekProvider
     image: str
     tmpfs: TmpfsSizes
     proxy_socket_host_path: Path
@@ -47,7 +47,7 @@ class ContractSpecDraft:
     """Incomplete contract spec holding all config-side fields; produced by initialize, completed by finalize."""
 
     github: GitHub
-    backend: AnthropicBackend | DeepSeekBackend
+    provider: AnthropicProvider | DeepSeekProvider
     image: str
     tmpfs: TmpfsSizes
     proxy_socket: str = PROXY_SOCKET
@@ -62,13 +62,13 @@ class ContractSpecDraft:
     def initialize(
         cls,
         project: Project,
-        backend: AnthropicBackend | DeepSeekBackend,
+        provider: AnthropicProvider | DeepSeekProvider,
         issue_id: int | None = None,
     ) -> ContractSpecDraft:
-        """Seed a draft from a resolved project and its backend."""
+        """Seed a draft from a resolved project and its provider."""
         return cls(
             github=project.github,
-            backend=backend,
+            provider=provider,
             image=project.image,
             tmpfs=project.tmpfs,
             issue_id=issue_id,
@@ -78,7 +78,7 @@ class ContractSpecDraft:
         """Bind the session-derived proxy socket path and return the complete spec."""
         return ContractSpec(
             github=self.github,
-            backend=self.backend,
+            provider=self.provider,
             image=self.image,
             tmpfs=self.tmpfs,
             proxy_socket_host_path=proxy_socket_host_path,

@@ -14,7 +14,7 @@ from adda_dev.domain.contract import (
     ContractSpec,
     ContractSpecDraft,
 )
-from adda_dev.domain.llm import AnthropicBackend, DeepSeekBackend
+from adda_dev.domain.llm import AnthropicProvider, DeepSeekProvider
 from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
 from adda_dev.infra.contract import DockerContractTranslator, _detect_tz
@@ -37,10 +37,10 @@ def _make_anthropic_spec() -> ContractSpec:
         }
     )
     github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    provider = AnthropicProvider(secret_name="claude-key", source=source)
     return ContractSpec(
         github=github,
-        backend=backend,
+        provider=provider,
         image="ghcr.io/test/adda:latest",
         tmpfs=TmpfsSizes(),
         proxy_socket_host_path=_FAKE_HOST_SOCKET,
@@ -57,7 +57,7 @@ def _make_deepseek_spec() -> ContractSpec:
     from adda_dev.domain.github import GitHub
 
     github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    backend = DeepSeekBackend(
+    provider = DeepSeekProvider(
         secret_name="ds-key",
         base_url="https://api.deepseek.com",
         model="deepseek-chat",
@@ -70,7 +70,7 @@ def _make_deepseek_spec() -> ContractSpec:
     )
     return ContractSpec(
         github=github,
-        backend=backend,
+        provider=provider,
         image="ghcr.io/test/adda:latest",
         tmpfs=TmpfsSizes(),
         proxy_socket_host_path=_FAKE_HOST_SOCKET,
@@ -285,10 +285,10 @@ def test_dockercontracttranslator_tmpfs_workspace_size_reflects_spec(tmp_path: P
     from adda_dev.domain.github import GitHub
 
     github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    provider = AnthropicProvider(secret_name="claude-key", source=source)
     spec = ContractSpec(
         github=github,
-        backend=backend,
+        provider=provider,
         image="img",
         tmpfs=TmpfsSizes(workspace="1024m"),
         proxy_socket_host_path=_FAKE_HOST_SOCKET,
@@ -336,10 +336,10 @@ def test_dockercontracttranslator_hardening_cap_drop_absent_when_false(tmp_path:
         {("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "claude-key"): "claude_test"}
     )
     github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    provider = AnthropicProvider(secret_name="claude-key", source=source)
     spec = ContractSpec(
         github=github,
-        backend=backend,
+        provider=provider,
         image="img",
         tmpfs=TmpfsSizes(),
         proxy_socket_host_path=_FAKE_HOST_SOCKET,
@@ -356,10 +356,10 @@ def test_dockercontracttranslator_hardening_no_new_privileges_absent_when_false(
         {("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "claude-key"): "claude_test"}
     )
     github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    provider = AnthropicProvider(secret_name="claude-key", source=source)
     spec = ContractSpec(
         github=github,
-        backend=backend,
+        provider=provider,
         image="img",
         tmpfs=TmpfsSizes(),
         proxy_socket_host_path=_FAKE_HOST_SOCKET,
@@ -376,10 +376,10 @@ def test_dockercontracttranslator_hardening_read_only_absent_when_false(tmp_path
         {("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "claude-key"): "claude_test"}
     )
     github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    provider = AnthropicProvider(secret_name="claude-key", source=source)
     spec = ContractSpec(
         github=github,
-        backend=backend,
+        provider=provider,
         image="img",
         tmpfs=TmpfsSizes(),
         proxy_socket_host_path=_FAKE_HOST_SOCKET,
@@ -396,10 +396,10 @@ def test_dockercontracttranslator_hardening_network_none_absent_when_false(tmp_p
         {("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "claude-key"): "claude_test"}
     )
     github = GitHub(owner="o", repo="r", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    provider = AnthropicProvider(secret_name="claude-key", source=source)
     spec = ContractSpec(
         github=github,
-        backend=backend,
+        provider=provider,
         image="img",
         tmpfs=TmpfsSizes(),
         proxy_socket_host_path=_FAKE_HOST_SOCKET,
@@ -424,9 +424,9 @@ def test_dockercontracttranslator_issue_id_in_args_when_set(tmp_path: Path) -> N
     from adda_dev.domain.github import GitHub
 
     github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    provider = AnthropicProvider(secret_name="claude-key", source=source)
     spec = ContractSpec(
-        github=github, backend=backend, image="img", tmpfs=TmpfsSizes(), proxy_socket_host_path=_FAKE_HOST_SOCKET, issue_id=42
+        github=github, provider=provider, image="img", tmpfs=TmpfsSizes(), proxy_socket_host_path=_FAKE_HOST_SOCKET, issue_id=42
     )
     params = _translate(spec, tmp_path)
     assert "ISSUE_ID=42" in params.args  # type: ignore[union-attr]
@@ -499,9 +499,9 @@ def test_detect_tz_raises_when_localtime_is_regular_file(tmp_path: Path, monkeyp
 # ---------------------------------------------------------------------------
 
 
-def _make_project_and_backend() -> tuple[Project, AnthropicBackend]:
+def _make_project_and_backend() -> tuple[Project, AnthropicProvider]:
     from adda_dev.domain.github import GitHub
-    from adda_dev.domain.llm import LlmBackend
+    from adda_dev.domain.llm import LlmProvider
 
     source = FakeSecretSource(
         {
@@ -510,70 +510,70 @@ def _make_project_and_backend() -> tuple[Project, AnthropicBackend]:
         }
     )
     github = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    provider = AnthropicProvider(secret_name="claude-key", source=source)
     project = Project(
         name="test-proj",
         github=github,
         image="ghcr.io/test/adda:latest",
-        backend=LlmBackend.anthropic,
+        provider=LlmProvider.anthropic,
         tmpfs=TmpfsSizes(),
     )
-    return project, backend
+    return project, provider
 
 
 def test_contractspecdraft_initialize_seeds_github() -> None:
-    project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.initialize(project, backend)
+    project, provider = _make_project_and_backend()
+    draft = ContractSpecDraft.initialize(project, provider)
     assert draft.github is project.github
 
 
-def test_contractspecdraft_initialize_seeds_backend() -> None:
-    project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.initialize(project, backend)
-    assert draft.backend is backend
+def test_contractspecdraft_initialize_seeds_provider() -> None:
+    project, provider = _make_project_and_backend()
+    draft = ContractSpecDraft.initialize(project, provider)
+    assert draft.provider is provider
 
 
 def test_contractspecdraft_initialize_seeds_image() -> None:
-    project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.initialize(project, backend)
+    project, provider = _make_project_and_backend()
+    draft = ContractSpecDraft.initialize(project, provider)
     assert draft.image == project.image
 
 
 def test_contractspecdraft_initialize_seeds_tmpfs() -> None:
-    project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.initialize(project, backend)
+    project, provider = _make_project_and_backend()
+    draft = ContractSpecDraft.initialize(project, provider)
     assert draft.tmpfs == project.tmpfs
 
 
 def test_contractspecdraft_initialize_issue_id_defaults_to_none() -> None:
-    project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.initialize(project, backend)
+    project, provider = _make_project_and_backend()
+    draft = ContractSpecDraft.initialize(project, provider)
     assert draft.issue_id is None
 
 
 def test_contractspecdraft_initialize_sets_issue_id() -> None:
-    project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.initialize(project, backend, issue_id=42)
+    project, provider = _make_project_and_backend()
+    draft = ContractSpecDraft.initialize(project, provider, issue_id=42)
     assert draft.issue_id == 42
 
 
 def test_contractspecdraft_finalize_returns_contractspec() -> None:
-    project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.initialize(project, backend)
+    project, provider = _make_project_and_backend()
+    draft = ContractSpecDraft.initialize(project, provider)
     spec = draft.finalize(_FAKE_HOST_SOCKET)
     assert isinstance(spec, ContractSpec)
 
 
 def test_contractspecdraft_finalize_binds_host_path() -> None:
-    project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.initialize(project, backend)
+    project, provider = _make_project_and_backend()
+    draft = ContractSpecDraft.initialize(project, provider)
     spec = draft.finalize(_FAKE_HOST_SOCKET)
     assert spec.proxy_socket_host_path == _FAKE_HOST_SOCKET
 
 
 def test_contractspecdraft_finalize_socket_mount_in_translated_args(tmp_path: Path) -> None:
-    project, backend = _make_project_and_backend()
-    draft = ContractSpecDraft.initialize(project, backend)
+    project, provider = _make_project_and_backend()
+    draft = ContractSpecDraft.initialize(project, provider)
     spec = draft.finalize(_FAKE_HOST_SOCKET)
     params = _translate(spec, tmp_path)
     args = params.args  # type: ignore[union-attr]

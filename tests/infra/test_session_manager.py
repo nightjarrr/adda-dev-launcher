@@ -6,7 +6,7 @@ import pytest
 
 from adda_dev.domain.contract import ContractSpec, ContractSpecDraft
 from adda_dev.domain.github import GitHub
-from adda_dev.domain.llm import AnthropicBackend, LlmBackend
+from adda_dev.domain.llm import AnthropicProvider, LlmProvider
 from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
 from adda_dev.domain.window import Window
@@ -57,15 +57,15 @@ def _make_draft(issue_id: int | None = None) -> ContractSpecDraft:
         }
     )
     gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    backend = AnthropicBackend(secret_name="claude-key", source=source)
+    provider = AnthropicProvider(secret_name="claude-key", source=source)
     project = Project(
         name="test-project",
         github=gh,
         image="ghcr.io/nightjarrr/adda-dev-launcher:v0.1.0",
-        backend=LlmBackend.anthropic,
+        provider=LlmProvider.anthropic,
         tmpfs=TmpfsSizes(),
     )
-    return ContractSpecDraft.initialize(project, backend, issue_id=issue_id)
+    return ContractSpecDraft.initialize(project, provider, issue_id=issue_id)
 
 
 def _make_manager(

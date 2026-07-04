@@ -1,12 +1,12 @@
 """
-LLM infrastructure: config DTOs and LlmConfigBackendRepository.
+LLM infrastructure: config DTOs and LlmConfigProviderRepository.
 """
 
 from typing import assert_never
 
 from ..common import StrictModel
 from ..domain.credentials import SecretSource
-from ..domain.llm import AnthropicBackend, BackendRepository, DeepSeekBackend, LlmBackend
+from ..domain.llm import AnthropicProvider, DeepSeekProvider, LlmProvider, ProviderRepository
 
 
 class AnthropicConfigModel(StrictModel):
@@ -35,21 +35,21 @@ class LlmConfig(StrictModel):
     deepseek: DeepSeekConfigModel = DeepSeekConfigModel()
 
 
-class LlmConfigBackendRepository(BackendRepository):
-    """BackendRepository adapter that builds backend aggregates from LlmConfig."""
+class LlmConfigProviderRepository(ProviderRepository):
+    """ProviderRepository adapter that builds provider aggregates from LlmConfig."""
 
     def __init__(self, config: LlmConfig, source: SecretSource) -> None:
         self._config = config
         self._source = source
 
-    def get(self, backend: LlmBackend) -> AnthropicBackend | DeepSeekBackend:
-        """Dispatch a LlmBackend enum value to its domain model, constructed from config."""
-        match backend:
-            case LlmBackend.anthropic:
-                return AnthropicBackend(secret_name=self._config.anthropic.secret_name, source=self._source)
-            case LlmBackend.deepseek:
+    def get(self, provider: LlmProvider) -> AnthropicProvider | DeepSeekProvider:
+        """Dispatch a LlmProvider enum value to its domain model, constructed from config."""
+        match provider:
+            case LlmProvider.anthropic:
+                return AnthropicProvider(secret_name=self._config.anthropic.secret_name, source=self._source)
+            case LlmProvider.deepseek:
                 c = self._config.deepseek
-                return DeepSeekBackend(
+                return DeepSeekProvider(
                     secret_name=c.secret_name,
                     base_url=c.base_url,
                     model=c.model,
@@ -60,4 +60,4 @@ class LlmConfigBackendRepository(BackendRepository):
                     effort_level=c.effort_level,
                     source=self._source,
                 )
-        assert_never(backend)
+        assert_never(provider)
