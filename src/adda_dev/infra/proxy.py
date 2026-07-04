@@ -72,7 +72,9 @@ class EnvoySidecar(ProxySidecar):
         host_socket = socket_dir / _ENVOY_SOCKET_FILENAME
 
         with self._output.step("Proxy image") as s:
-            self._engine.pull(self._runner, self._envoy_image).wait()
+            handle = self._engine.pull(self._runner, self._envoy_image)
+            if handle.wait() != 0:
+                raise ProxyError("Pull failed", stdout=handle.stdout().strip(), stderr=handle.stderr().strip())
             s.done(f"pulled {self._envoy_image}")
 
         name = f"{session.session_id}-proxy"

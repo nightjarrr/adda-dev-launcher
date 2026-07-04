@@ -4,9 +4,23 @@ AddaPrimaryContainer port: abstract interface for the primary ADDA container lif
 
 import abc
 
+from ..common import AddaDevError
 from .contract import ContractSpec
 from .session import Session
 from .window import Window
+
+
+class ContainerError(AddaDevError):
+    """Raised when the primary container fails to pull or start."""
+
+    def __init__(self, message: str, *, stdout: str | None = None, stderr: str | None = None) -> None:
+        super().__init__(message)
+        self.stdout = stdout
+        self.stderr = stderr
+        if stdout:
+            self.details.append(("stdout", stdout))
+        if stderr:
+            self.details.append(("stderr", stderr))
 
 
 class AddaPrimaryContainer(abc.ABC):

@@ -5,6 +5,9 @@ Tests for adda_dev.infra.adda_container: AddaPrimaryContainerImpl.
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
+from adda_dev.domain.adda_container import ContainerError
 from adda_dev.domain.contract import ContractProcessParams, ContractSpec, ContractTranslator
 from adda_dev.domain.session import Session
 from adda_dev.domain.window import Window
@@ -316,3 +319,31 @@ def test_addaprimarycontainer_start_pulls_for_non_local_image() -> None:
     pull_calls = [c for c in engine.calls if c[0] == "pull"]
     assert len(pull_calls) == 1
     assert pull_calls[0][1] == _TEST_IMAGE
+
+
+# ---------------------------------------------------------------------------
+# AddaPrimaryContainerImpl — pull failure
+# ---------------------------------------------------------------------------
+
+
+class _FailingPullHandle(_FakeHandle):
+    def wait(self) -> int:
+        return 1
+
+    def stderr(self) -> str:
+        return "manifest unknown"
+
+
+class _FailingPullEngine(FakeContainerEngine):
+    """Engine whose pull() returns a handle with non-zero exit code."""
+
+    def pull(self, runner: ProcessRunner, image: str) -> ProcessHandle:  # type: ignore[override]
+        self.calls.append(("pull", image))
+        return _FailingPullHandle()
+
+
+def test_addaprimarycontainer_start_raises_container_error_on_pull_failure() -> None:
+    engine = _FailingPullEngine()
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
+    with pytest.raises(ContainerError):
+        impl.start(_make_session(), _make_spec(), _FakeWindow("w"))

@@ -562,6 +562,40 @@ def test_envoy_sidecar_capture_logs_swallows_exception(tmp_path: Path) -> None:
         sidecar.start(_make_session(tmp_path))
 
 
+# ---------------------------------------------------------------------------
+# EnvoySidecar.start — pull failure
+# ---------------------------------------------------------------------------
+
+
+class _FailingPullHandle:
+    def wait(self) -> int:
+        return 1
+
+    def stdout(self) -> str:
+        return ""
+
+    def stderr(self) -> str:
+        return "manifest unknown"
+
+    def terminate(self) -> None:
+        pass
+
+
+class _FailingPullEngine(FakeContainerEngine):
+    """Engine whose pull() returns a handle with non-zero exit code."""
+
+    def pull(self, runner: object, image: str) -> _FailingPullHandle:  # type: ignore[override]
+        self.calls.append(("pull", image))
+        return _FailingPullHandle()
+
+
+def test_envoy_sidecar_start_raises_proxy_error_on_pull_failure(tmp_path: Path) -> None:
+    eng = _FailingPullEngine()
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
+    with pytest.raises(ProxyError, match="Pull failed"):
+        sidecar.start(_make_session(tmp_path))
+
+
 def test_envoy_sidecar_stop_rm_uses_force(tmp_path: Path) -> None:
     socket_path = tmp_path / "proxy_socket" / "proxy.sock"
 

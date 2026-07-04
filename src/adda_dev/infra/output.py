@@ -32,7 +32,15 @@ class RichOutput:
         self._console.print(f"[yellow]Warning:[/yellow] {message}")
 
     def error(self, exc: Exception) -> None:
-        self._console.print(f"[red]Error:[/red] {exc}")
+        from rich.panel import Panel
+
+        body = Text()
+        body.append(str(exc.args[0]) if exc.args else str(exc))
+        if hasattr(exc, "details"):
+            for label, content in exc.details:
+                body.append(f"\n\n{label}\n", style="dim")
+                body.append(content)
+        self._console.print(Panel(body, title="[bold red]Error[/bold red]", border_style="red", title_align="left"))
 
     def blank(self) -> None:
         self._console.print()
@@ -62,7 +70,7 @@ class RichOutput:
         max_value_len = width - 36
         if max_value_len > 0 and len(rendered_value) > max_value_len:
             rendered_value = rendered_value[: max_value_len - 1] + "…"
-        self._console.print(f"  [bold]{key_col}[/bold]  {rendered_value}")
+        self._console.print(f"  [bold]{key_col}[/bold]  {rendered_value}", highlight=False)
 
     def step(self, label: str) -> StepContext:
         return _RichStepContext(label, self._console)

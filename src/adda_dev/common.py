@@ -11,6 +11,16 @@ from pydantic import BaseModel, ConfigDict
 class AddaDevError(Exception):
     """Root exception for all adda-dev domain errors."""
 
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.details: list[tuple[str, str]] = []
+
+    def __str__(self) -> str:
+        parts = [super().__str__()]
+        for label, content in self.details:
+            parts.append(f"\n--- {label} ---\n{content}")
+        return "".join(parts)
+
 
 class StrictModel(BaseModel):
     """Shared Pydantic base model with extra='forbid' applied to all subclasses."""

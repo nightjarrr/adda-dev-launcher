@@ -54,6 +54,39 @@ def test_richoutput_error_writes_exception() -> None:
     assert "bad value" in buf.getvalue()
 
 
+def test_richoutput_error_renders_panel_border() -> None:
+    output, buf = _make_output()
+    output.error(ValueError("something went wrong"))
+    # Panel renders with box-drawing characters — check for the title or border chars
+    content = buf.getvalue()
+    assert "something went wrong" in content
+
+
+def test_richoutput_error_with_details_renders_label_sections() -> None:
+    from adda_dev.common import AddaDevError
+
+    exc = AddaDevError("pull failed")
+    exc.details.append(("stdout", "line from stdout"))
+    exc.details.append(("stderr", "error line"))
+    output, buf = _make_output()
+    output.error(exc)
+    content = buf.getvalue()
+    assert "pull failed" in content
+    assert "stdout" in content
+    assert "line from stdout" in content
+    assert "stderr" in content
+    assert "error line" in content
+
+
+def test_richoutput_error_plain_exception_no_details_section() -> None:
+    output, buf = _make_output()
+    output.error(RuntimeError("plain error"))
+    content = buf.getvalue()
+    assert "plain error" in content
+    # A plain RuntimeError has no details attribute — no label sections expected
+    assert "--- " not in content
+
+
 def test_richoutput_blank_writes_newline() -> None:
     output, buf = _make_output()
     output.blank()

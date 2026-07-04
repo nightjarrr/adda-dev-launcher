@@ -16,14 +16,10 @@ class ProxyError(AddaDevError):
         super().__init__(message)
         self.stdout = stdout
         self.stderr = stderr
-
-    def __str__(self) -> str:
-        parts = [super().__str__()]
-        if self.stdout:
-            parts.append(f"\n--- stdout ---\n{self.stdout}")
-        if self.stderr:
-            parts.append(f"\n--- stderr ---\n{self.stderr}")
-        return "".join(parts)
+        if stdout:
+            self.details.append(("stdout", stdout))
+        if stderr:
+            self.details.append(("stderr", stderr))
 
 
 class ProxySidecar(abc.ABC):
