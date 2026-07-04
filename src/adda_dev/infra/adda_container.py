@@ -2,6 +2,7 @@
 AddaPrimaryContainerImpl adapter: pulls and runs the primary ADDA container, with guarded teardown.
 """
 
+from ..common import Output
 from ..domain.adda_container import AddaPrimaryContainer
 from ..domain.contract import ContractSpec, ContractTranslator
 from ..domain.session import Session
@@ -14,9 +15,16 @@ from .window import WindowedRunner
 class AddaPrimaryContainerImpl(AddaPrimaryContainer):
     """AddaPrimaryContainer adapter that drives a ContainerEngine to pull and run the ADDA container."""
 
-    def __init__(self, engine: ContainerEngine, translator: ContractTranslator, cmd_override: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        engine: ContainerEngine,
+        translator: ContractTranslator,
+        output: Output,
+        cmd_override: tuple[str, ...] = (),
+    ) -> None:
         self._engine = engine
         self._translator = translator
+        self._output = output
         self._cmd_override = cmd_override
         self._pull_runner = DefaultRunner()
         self._teardown_runner = CapturedOutputRunner()
@@ -29,7 +37,10 @@ class AddaPrimaryContainerImpl(AddaPrimaryContainer):
         # Set name first so stop() covers post-start failures
         self._name = session.session_id
         params = self._translator.translate(spec)
-        self._engine.pull(self._pull_runner, spec.image).wait()
+        if spec.image.endswith(":local"):
+            self._output.info(f"Skipping pull: {spec.image} is tagged :local.")
+        else:
+            self._engine.pull(self._pull_runner, spec.image).wait()
         self._engine.run_it(
             WindowedRunner(window),
             spec.image,

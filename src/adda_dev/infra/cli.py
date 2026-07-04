@@ -52,7 +52,7 @@ def run(
         project_repo = TomlProjectRepository(config.project_defaults, source)
         backend_repo = LlmConfigBackendRepository(config.llm, source)
         sidecar = EnvoySidecar(engine, config.envoy_image, output)
-        container = AddaPrimaryContainerImpl(engine, DockerContractTranslator(), cmd_override=cmd_override)
+        container = AddaPrimaryContainerImpl(engine, DockerContractTranslator(), output, cmd_override=cmd_override)
         session_manager = DirectSessionManager(FsSessionRepository(), output, sidecar, container)
         run_session(project_name, project_repo, backend_repo, session_manager, output, issue_id)
     except AddaDevError as exc:
