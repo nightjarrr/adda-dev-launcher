@@ -61,12 +61,16 @@ class DirectWindow(Window):
     def __init__(self, name: str) -> None:
         super().__init__(name)
         self._handle: ProcessHandle | None = None
+        self._cmd: list[str] = []
+        self._env: dict[str, str] | None = None
 
     def open(self, cmd: list[str], env: dict[str, str] | None = None) -> None:
-        self._handle = DefaultRunner().run(cmd, env)
+        # Stage the command; subprocess is not started until attach() is called
+        self._cmd = cmd
+        self._env = env
 
     def attach(self) -> None:
-        assert self._handle is not None
+        self._handle = DefaultRunner().run(self._cmd, self._env)
         self._handle.wait()
 
     def close(self) -> None:

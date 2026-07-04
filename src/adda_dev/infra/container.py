@@ -199,10 +199,6 @@ def create_engine(choice: ContainerEngineChoice, output: Output) -> ContainerEng
         engine: ContainerEngine = DockerEngine()
     else:
         raise AddaDevError(f"Container engine '{choice.value}' is not supported yet; only 'docker' is available.")
-    output.info(f"Engine:   {engine.name} {engine.version} ({'rootless' if engine.rootless else 'root'})")
-    if not engine.rootless:
-        output.warning(
-            f"Running under root {engine.name}; a container escape would hold host-root "
-            f"privileges — rootless {engine.name} is recommended."
-        )
+    rootless_str = "rootless" if engine.rootless else "root  ⚠ rootless recommended"
+    output.kv("Docker", f"{engine.version} · {rootless_str}")
     return engine

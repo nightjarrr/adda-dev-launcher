@@ -378,7 +378,7 @@ def test_envoy_sidecar_start_poll_success_emits_ready_message(tmp_path: Path) ->
     eng = _SocketCreatingEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, output, sleep=lambda _: None, attempts=5)
     sidecar.start(_make_session(tmp_path))
-    assert any("ready" in msg.lower() or "envoy" in msg.lower() for msg in output.info_calls)
+    assert any(label == "Proxy" for label, _ in output.step_calls)
 
 
 # ---------------------------------------------------------------------------

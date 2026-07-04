@@ -29,8 +29,17 @@ def run_session(
     project = project_repo.get(project_name)
     resolved_provider = options.provider or project.provider
     provider = provider_repo.get(resolved_provider)
-    output.info(f"Project:  {project.name}")
-    output.info(f"Image:    {project.image}")
-    output.info(f"Provider: {resolved_provider.value}")
+    output.kv("Project", project.name)
+    output.kv("Provider", str(resolved_provider))
+    output.kv("Container", project.image)
+    output.kv("GitHub", f"{project.github.owner}/{project.github.repo}")
+    output.kv(
+        "Tmpfs",
+        (
+            f"home {project.tmpfs.home}",
+            f"workspace {project.tmpfs.workspace}",
+            f"tmp {project.tmpfs.tmp}",
+        ),
+    )
     draft = ContractSpecDraft.initialize(project, provider, options.issue_id)
     session_manager.run(project_name, draft)

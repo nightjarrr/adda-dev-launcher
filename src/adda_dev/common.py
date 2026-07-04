@@ -2,7 +2,8 @@
 Cross-cutting foundations: root exception, shared Pydantic base model, and Output port.
 """
 
-from typing import Protocol
+from types import TracebackType
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
@@ -17,6 +18,24 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class StepContext:
+    """Context manager returned by Output.step(); signals completion or failure of a named step."""
+
+    def __enter__(self) -> StepContext:
+        raise NotImplementedError
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> Literal[False]:
+        raise NotImplementedError
+
+    def done(self, detail: str) -> None:
+        raise NotImplementedError
+
+
 class Output(Protocol):
     """Port for emitting user-visible messages without coupling to a delivery library."""
 
@@ -25,3 +44,11 @@ class Output(Protocol):
     def warning(self, message: str) -> None: ...
 
     def error(self, exc: Exception) -> None: ...
+
+    def ruler(self, title: str = "", *, pad: bool = True) -> None: ...
+
+    def blank(self) -> None: ...
+
+    def kv(self, key: str, value: str | tuple[str, ...]) -> None: ...
+
+    def step(self, label: str) -> StepContext: ...

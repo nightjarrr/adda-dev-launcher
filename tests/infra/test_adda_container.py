@@ -301,13 +301,12 @@ def test_addaprimarycontainer_start_skips_pull_for_local_image() -> None:
     assert len(pull_calls) == 0
 
 
-def test_addaprimarycontainer_start_emits_info_for_local_image() -> None:
+def test_addaprimarycontainer_start_emits_step_for_local_image() -> None:
     engine = FakeContainerEngine()
     output = FakeOutput()
     impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), output)
     impl.start(_make_session(), _make_local_spec(), _FakeWindow("w"))
-    assert len(output.info_calls) > 0
-    assert ":local" in output.info_calls[0]
+    assert any(label == "ADDA Dev Runtime" and detail is not None and "local" in detail for label, detail in output.step_calls)
 
 
 def test_addaprimarycontainer_start_pulls_for_non_local_image() -> None:

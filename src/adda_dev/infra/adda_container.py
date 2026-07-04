@@ -33,14 +33,16 @@ class AddaPrimaryContainerImpl(AddaPrimaryContainer):
     # Public methods
 
     def start(self, session: Session, spec: ContractSpec, window: Window) -> None:
-        """Translate spec, pull the image, and run the container interactively into the given window."""
+        """Translate spec, pull the image if needed, and run the container interactively into the given window."""
         # Set name first so stop() covers post-start failures
         self._name = session.session_id
         params = self._translator.translate(spec)
-        if spec.image.endswith(":local"):
-            self._output.info(f"Skipping pull: {spec.image} is tagged :local.")
-        else:
-            self._engine.pull(self._pull_runner, spec.image).wait()
+        with self._output.step("ADDA Dev Runtime") as s:
+            if spec.image.endswith(":local"):
+                s.done(f"local {spec.image}")
+            else:
+                self._engine.pull(self._pull_runner, spec.image).wait()
+                s.done(f"pulled {spec.image}")
         self._engine.run_it(
             WindowedRunner(window),
             spec.image,
@@ -57,7 +59,9 @@ class AddaPrimaryContainerImpl(AddaPrimaryContainer):
             return
         name = self._name
         try:
-            self._engine.stop(self._teardown_runner, name).wait()
+            with self._output.step("Container") as s:
+                self._engine.stop(self._teardown_runner, name).wait()
+                s.done("stopped")
         except Exception:  # noqa: BLE001
             pass
         try:

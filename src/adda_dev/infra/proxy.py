@@ -71,18 +71,23 @@ class EnvoySidecar(ProxySidecar):
 
         host_socket = socket_dir / _ENVOY_SOCKET_FILENAME
 
-        self._engine.pull(self._runner, self._envoy_image).wait()
+        with self._output.step("Proxy image") as s:
+            self._engine.pull(self._runner, self._envoy_image).wait()
+            s.done(f"pulled {self._envoy_image}")
 
         name = f"{session.session_id}-proxy"
         args = self._build_args(socket_dir, config_path)
         cmd = ["-c", _ENVOY_CONFIG_CONTAINER_PATH]
 
-        handle = self._engine.run_d(self._runner, self._envoy_image, name, args, cmd=cmd, remove=False)
-        if handle.wait() != 0:
-            raise ProxyError("Envoy container failed to start", stderr=handle.stderr().strip())
-        self._container_name = name
+        with self._output.step("Proxy") as s:
+            handle = self._engine.run_d(self._runner, self._envoy_image, name, args, cmd=cmd, remove=False)
+            if handle.wait() != 0:
+                raise ProxyError("Envoy container failed to start", stderr=handle.stderr().strip())
+            self._container_name = name
+            self._poll_ready(host_socket)
+            s.done("ready")
 
-        return self._poll_ready(host_socket)
+        return host_socket
 
     def stop(self) -> None:
         """Stop and remove the Envoy container, best-effort."""
@@ -90,7 +95,9 @@ class EnvoySidecar(ProxySidecar):
             return
         name = self._container_name
         try:
-            self._engine.stop(self._runner, name).wait()
+            with self._output.step("Proxy") as s:
+                self._engine.stop(self._runner, name).wait()
+                s.done("stopped")
         except Exception:  # noqa: BLE001
             pass
         try:
@@ -118,14 +125,11 @@ class EnvoySidecar(ProxySidecar):
             f"type=bind,source={socket_dir},target={_ENVOY_SOCKET_CONTAINER_DIR}",
         ]
 
-    def _poll_ready(self, host_socket: Path) -> Path:
+    def _poll_ready(self, host_socket: Path) -> None:
         """Poll until the Envoy Unix socket appears, the container exits, or attempts are exhausted."""
-        start = time.monotonic()
         for _ in range(self._attempts):
             if host_socket.is_socket():
-                elapsed = time.monotonic() - start
-                self._output.info(f"Envoy proxy ready in {elapsed:.1f}s.")
-                return host_socket
+                return
             if self._container_exited():
                 stdout, stderr = self._capture_logs()
                 raise ProxyError("Envoy exited before creating the proxy socket", stdout=stdout, stderr=stderr)

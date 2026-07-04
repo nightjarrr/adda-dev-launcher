@@ -333,34 +333,16 @@ def test_create_engine_docker_returns_container_engine(rootless_docker_path: Pat
     assert isinstance(engine, ContainerEngine)
 
 
-def test_create_engine_docker_emits_banner_with_name_and_version(rootless_docker_path: Path) -> None:
+def test_create_engine_docker_emits_kv_with_version(rootless_docker_path: Path) -> None:
     output = FakeOutput()
     create_engine(ContainerEngineChoice.docker, output)
-    assert any("docker" in msg and "27.1.1" in msg for msg in output.info_calls)
+    assert any(k == "Docker" and "27.1.1" in str(v) for k, v in output.kv_calls)
 
 
-def test_create_engine_rootless_docker_banner_contains_rootless(rootless_docker_path: Path) -> None:
+def test_create_engine_rootful_docker_kv_contains_warning(rootful_docker_path: Path) -> None:
     output = FakeOutput()
     create_engine(ContainerEngineChoice.docker, output)
-    assert any("rootless" in msg for msg in output.info_calls)
-
-
-def test_create_engine_rootless_docker_emits_no_warning(rootless_docker_path: Path) -> None:
-    output = FakeOutput()
-    create_engine(ContainerEngineChoice.docker, output)
-    assert len(output.warning_calls) == 0
-
-
-def test_create_engine_rootful_docker_emits_one_warning(rootful_docker_path: Path) -> None:
-    output = FakeOutput()
-    create_engine(ContainerEngineChoice.docker, output)
-    assert len(output.warning_calls) == 1
-
-
-def test_create_engine_rootful_docker_warning_mentions_rootless(rootful_docker_path: Path) -> None:
-    output = FakeOutput()
-    create_engine(ContainerEngineChoice.docker, output)
-    assert "rootless" in output.warning_calls[0]
+    assert any(k == "Docker" and "⚠" in str(v) for k, v in output.kv_calls)
 
 
 def test_create_engine_podman_raises_adda_dev_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

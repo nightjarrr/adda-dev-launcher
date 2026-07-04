@@ -57,7 +57,7 @@ def test_run_session_output_includes_project_name() -> None:
 
     run_session("demo", project_repo, provider_repo, session_manager, output, RunOptions())
 
-    assert any("demo" in msg for msg in output.info_calls)
+    assert any("demo" in str(v) for _, v in output.kv_calls)
 
 
 def test_run_session_output_includes_image() -> None:
@@ -71,7 +71,7 @@ def test_run_session_output_includes_image() -> None:
 
     run_session("demo", project_repo, provider_repo, session_manager, output, RunOptions())
 
-    assert any("ghcr.io" in msg for msg in output.info_calls)
+    assert any("ghcr.io" in str(v) for _, v in output.kv_calls)
 
 
 def test_run_session_output_includes_backend() -> None:
@@ -85,7 +85,7 @@ def test_run_session_output_includes_backend() -> None:
 
     run_session("demo", project_repo, provider_repo, session_manager, output, RunOptions())
 
-    assert any("anthropic" in msg for msg in output.info_calls)
+    assert any("anthropic" in str(v) for _, v in output.kv_calls)
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ def test_run_session_provider_override_uses_specified_backend() -> None:
 
     run_session("demo", project_repo, provider_repo, session_manager, output, RunOptions(provider=LlmProvider.deepseek))
 
-    assert any("deepseek" in msg for msg in output.info_calls)
+    assert any("deepseek" in str(v) for _, v in output.kv_calls)
 
 
 def test_run_session_provider_none_falls_back_to_project_backend() -> None:
@@ -180,7 +180,7 @@ def test_run_session_provider_none_falls_back_to_project_backend() -> None:
 
     run_session("demo", project_repo, provider_repo, session_manager, output, RunOptions(provider=None))
 
-    assert any("anthropic" in msg for msg in output.info_calls)
+    assert any("anthropic" in str(v) for _, v in output.kv_calls)
 
 
 # ---------------------------------------------------------------------------
