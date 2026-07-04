@@ -14,17 +14,17 @@ from tests.conftest import FakeSecretSource
 # ---------------------------------------------------------------------------
 
 
-def test_llm_backend_members() -> None:
+def test_llm_provider_members() -> None:
     assert LlmProvider.anthropic == "anthropic"
     assert LlmProvider.deepseek == "deepseek"
 
 
-def test_llm_backend_from_string() -> None:
+def test_llm_provider_from_string() -> None:
     assert LlmProvider("anthropic") is LlmProvider.anthropic
     assert LlmProvider("deepseek") is LlmProvider.deepseek
 
 
-def test_llm_backend_invalid_raises() -> None:
+def test_llm_provider_invalid_raises() -> None:
     with pytest.raises(ValueError):
         LlmProvider("openai")
 
@@ -58,7 +58,7 @@ def test_llm_config_partial_override() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_llm_config_backend_repository_anthropic_returns_anthropic_backend() -> None:
+def test_llm_config_provider_repository_anthropic_returns_anthropic_provider() -> None:
     fake = FakeSecretSource()
     cfg = LlmConfig()
     result = LlmConfigProviderRepository(cfg, fake).get(LlmProvider.anthropic)
@@ -66,7 +66,7 @@ def test_llm_config_backend_repository_anthropic_returns_anthropic_backend() -> 
     assert result.secret_name == "oauth"
 
 
-def test_llm_config_backend_repository_deepseek_returns_deepseek_backend() -> None:
+def test_llm_config_provider_repository_deepseek_returns_deepseek_provider() -> None:
     fake = FakeSecretSource()
     cfg = LlmConfig()
     result = LlmConfigProviderRepository(cfg, fake).get(LlmProvider.deepseek)
@@ -74,7 +74,7 @@ def test_llm_config_backend_repository_deepseek_returns_deepseek_backend() -> No
     assert result.secret_name == "apikey"
 
 
-def test_llm_config_backend_repository_anthropic_uses_config() -> None:
+def test_llm_config_provider_repository_anthropic_uses_config() -> None:
     fake = FakeSecretSource()
     cfg = LlmConfig.model_validate({"anthropic": {"secret_name": "custom-oauth"}})
     result = LlmConfigProviderRepository(cfg, fake).get(LlmProvider.anthropic)
@@ -82,7 +82,7 @@ def test_llm_config_backend_repository_anthropic_uses_config() -> None:
     assert result.secret_name == "custom-oauth"
 
 
-def test_llm_config_backend_repository_deepseek_uses_config() -> None:
+def test_llm_config_provider_repository_deepseek_uses_config() -> None:
     fake = FakeSecretSource()
     cfg = LlmConfig.model_validate({"deepseek": {"secret_name": "custom-ds"}})
     result = LlmConfigProviderRepository(cfg, fake).get(LlmProvider.deepseek)
