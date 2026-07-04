@@ -40,24 +40,30 @@ class SessionManager(abc.ABC):
         """Create a session, start the sidecar, pull and run the main container."""
         session = self._repo.create(project_name, draft.issue_id)
         self._session = session
+        self._output.ruler(f"Session {session.session_id}")
         host_socket = self._sidecar.start(session)
         spec = draft.finalize(host_socket)
-        self._output.info(f"Session:  {session.session_id}")
         primary = self.create_window("adda-dev primary")
         self._windows.append(primary)
         self._container.start(session, spec, primary)
         self._open_secondary_windows(session, spec)
+        self._output.ruler(f"Running container {spec.image}")
         primary.attach()
 
     def _terminate(self) -> None:
         """Close all tracked windows, stop container, run teardown hook, stop sidecar, then delete the session record."""
+        if self._session is not None:
+            self._output.ruler(f"Session cleanup {self._session.session_id}")
         for window in self._windows:
             window.close()
         self._container.stop()
         self._teardown()
         self._sidecar.stop()
         if self._session is not None:
-            self._repo.delete(self._session)
+            with self._output.step("Session folder") as s:
+                self._repo.delete(self._session)
+                s.done("deleted")
+        self._output.blank()
 
     @abc.abstractmethod
     def create_window(self, name: str) -> Window:

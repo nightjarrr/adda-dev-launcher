@@ -31,6 +31,25 @@ class FakeSecretSource(SecretSource):
         return value
 
 
+class FakeStepContext:
+    """StepContext test double that records completion or failure."""
+
+    def __init__(self, label: str, step_calls: list[tuple[str, str | None]]) -> None:
+        self._label = label
+        self._step_calls = step_calls
+
+    def __enter__(self) -> FakeStepContext:
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> bool:
+        if exc_type is not None:
+            self._step_calls.append((self._label, None))
+        return False
+
+    def done(self, detail: str) -> None:
+        self._step_calls.append((self._label, detail))
+
+
 class FakeOutput:
     """Output test double that captures calls."""
 
@@ -38,6 +57,10 @@ class FakeOutput:
         self.info_calls: list[str] = []
         self.warning_calls: list[str] = []
         self.error_calls: list[Exception] = []
+        self.ruler_calls: list[str] = []
+        self.blank_count: int = 0
+        self.kv_calls: list[tuple[str, str | tuple[str, ...]]] = []
+        self.step_calls: list[tuple[str, str | None]] = []
 
     def info(self, message: str) -> None:
         self.info_calls.append(message)
@@ -47,6 +70,20 @@ class FakeOutput:
 
     def error(self, exc: Exception) -> None:
         self.error_calls.append(exc)
+
+    def ruler(self, title: str = "", *, pad: bool = True) -> None:
+        self.ruler_calls.append(title)
+        if pad:
+            self.blank_count += 2
+
+    def blank(self) -> None:
+        self.blank_count += 1
+
+    def kv(self, key: str, value: str | tuple[str, ...]) -> None:
+        self.kv_calls.append((key, value))
+
+    def step(self, label: str) -> FakeStepContext:
+        return FakeStepContext(label, self.step_calls)
 
 
 class FakeProjectRepository(ProjectRepository):

@@ -65,6 +65,7 @@ def run(
 
     try:
         config = load_app_config()
+        output.ruler("adda-dev")
         engine = create_engine(config.container_engine, output)
         project_repo = TomlProjectRepository(config.project_defaults, source)
         provider_repo = LlmConfigProviderRepository(config.llm, source)

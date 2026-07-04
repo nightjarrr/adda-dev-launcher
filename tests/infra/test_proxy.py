@@ -378,7 +378,7 @@ def test_envoy_sidecar_start_poll_success_emits_ready_message(tmp_path: Path) ->
     eng = _SocketCreatingEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, output, sleep=lambda _: None, attempts=5)
     sidecar.start(_make_session(tmp_path))
-    assert any("ready" in msg.lower() or "envoy" in msg.lower() for msg in output.info_calls)
+    assert any(label == "Proxy" for label, _ in output.step_calls)
 
 
 # ---------------------------------------------------------------------------
@@ -560,6 +560,41 @@ def test_envoy_sidecar_capture_logs_swallows_exception(tmp_path: Path) -> None:
     sidecar = EnvoySidecar(_RaisingLogsEngine(), _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError):
         sidecar.start(_make_session(tmp_path))
+
+
+# ---------------------------------------------------------------------------
+# EnvoySidecar.start — pull failure
+# ---------------------------------------------------------------------------
+
+
+class _FailingPullHandle:
+    def wait(self) -> int:
+        return 1
+
+    def stdout(self) -> str:
+        return ""
+
+    def stderr(self) -> str:
+        return "manifest unknown"
+
+    def terminate(self) -> None:
+        pass
+
+
+class _FailingPullEngine(FakeContainerEngine):
+    """Engine whose pull() returns a handle with non-zero exit code."""
+
+    def pull(self, runner: object, image: str) -> _FailingPullHandle:  # type: ignore[override]
+        self.calls.append(("pull", image))
+        return _FailingPullHandle()
+
+
+def test_envoy_sidecar_start_raises_proxy_error_on_pull_failure(tmp_path: Path) -> None:
+    eng = _FailingPullEngine()
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
+    with pytest.raises(ProxyError) as exc_info:
+        sidecar.start(_make_session(tmp_path))
+    assert _FAKE_ENVOY_IMAGE in str(exc_info.value.args[0])
 
 
 def test_envoy_sidecar_stop_rm_uses_force(tmp_path: Path) -> None:
