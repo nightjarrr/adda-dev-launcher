@@ -20,6 +20,21 @@ class ContainerEngineChoice(StrEnum):
     podman = "podman"
 
 
+class SessionModeChoice(StrEnum):
+    tmux = "tmux"
+    direct = "direct"
+
+
+class TmuxSessionConfig(StrictModel):
+    shell_window: bool = True
+    proxy_logs_window: bool = True
+
+
+class SessionConfig(StrictModel):
+    mode: SessionModeChoice = SessionModeChoice.tmux
+    tmux: TmuxSessionConfig = TmuxSessionConfig()
+
+
 class ProjectDefaults(StrictModel):
     """Default values inherited by projects unless overridden in the project file."""
 
@@ -36,6 +51,7 @@ class AppConfig(StrictModel):
     envoy_image: str = DEFAULT_ENVOY_IMAGE
     llm: LlmConfig = LlmConfig()
     project_defaults: ProjectDefaults = ProjectDefaults()
+    session: SessionConfig = SessionConfig()
 
 
 def load_app_config() -> AppConfig:

@@ -12,8 +12,8 @@ from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicProvider, LlmProvider
 from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
-from adda_dev.infra.cli import _resolve_provider, _terminate_on_sigterm, app
-from adda_dev.infra.config import ContainerEngineChoice
+from adda_dev.infra.cli import _resolve_provider, _resolve_session_mode, _terminate_on_sigterm, app
+from adda_dev.infra.config import ContainerEngineChoice, SessionConfig, SessionModeChoice
 from adda_dev.infra.container import ContainerEngineUnavailableError
 from adda_dev.infra.llm import LlmConfig
 from tests.conftest import FakeContainerEngine, FakeSecretSource
@@ -58,6 +58,7 @@ def _make_mock_config(engine_choice: ContainerEngineChoice = ContainerEngineChoi
     mock_config.project_defaults = MagicMock()
     mock_config.llm = LlmConfig()
     mock_config.container_engine = engine_choice
+    mock_config.session = SessionConfig(mode=SessionModeChoice.direct)
     return mock_config
 
 
@@ -413,3 +414,140 @@ def test_run_no_provider_flag_exits_0() -> None:
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
         result = runner.invoke(app, ["run", "demo"])
     assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# _resolve_session_mode — unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_session_mode_none_with_tmux_config_returns_tmux() -> None:
+    result = _resolve_session_mode(SessionModeChoice.tmux, None)
+    assert result == SessionModeChoice.tmux
+
+
+def test_resolve_session_mode_none_with_direct_config_returns_direct() -> None:
+    result = _resolve_session_mode(SessionModeChoice.direct, None)
+    assert result == SessionModeChoice.direct
+
+
+def test_resolve_session_mode_true_overrides_direct_to_tmux() -> None:
+    result = _resolve_session_mode(SessionModeChoice.direct, True)
+    assert result == SessionModeChoice.tmux
+
+
+def test_resolve_session_mode_false_overrides_tmux_to_direct() -> None:
+    result = _resolve_session_mode(SessionModeChoice.tmux, False)
+    assert result == SessionModeChoice.direct
+
+
+# ---------------------------------------------------------------------------
+# run — tmux mode selection
+# ---------------------------------------------------------------------------
+
+
+def _make_tmux_config(mode: SessionModeChoice = SessionModeChoice.tmux) -> MagicMock:
+    """Return a mock config with session.mode = mode and real SessionConfig.tmux defaults."""
+    from adda_dev.infra.config import TmuxSessionConfig
+
+    mock_config = MagicMock()
+    mock_config.project_defaults = MagicMock()
+    mock_config.llm = LlmConfig()
+    mock_config.container_engine = ContainerEngineChoice.docker
+    mock_config.session = SessionConfig(mode=mode)
+    mock_config.session.tmux = TmuxSessionConfig()
+    return mock_config
+
+
+def test_run_tmux_mode_selects_tmux_session_manager() -> None:
+    fake = FakeSecretSource(
+        {
+            ("adda-dev:github", "demo-token"): "ghp_secret_token",
+            ("adda-dev:anthropic", "oauth"): "claude_oauth_token",
+        }
+    )
+    mock_config = _make_tmux_config(SessionModeChoice.tmux)
+    mock_project_repo = MagicMock()
+    mock_project_repo.get.return_value = _make_project(fake)
+    mock_backend_repo = MagicMock()
+    mock_backend_repo.get.return_value = _make_backend(fake)
+    mock_session_manager = MagicMock()
+    mock_session_manager.launch.return_value = MagicMock(session_id="adda-dev-session-test0001")
+    fake_engine = FakeContainerEngine()
+    mock_tmux_server = MagicMock()
+    mock_tmux_manager = MagicMock(return_value=mock_session_manager)
+
+    with (
+        patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
+        patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
+        patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
+        patch("adda_dev.infra.cli.LlmConfigProviderRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.TmuxServer", return_value=mock_tmux_server),
+        patch("adda_dev.infra.cli.TmuxSessionManager", mock_tmux_manager),
+    ):
+        result = runner.invoke(app, ["run", "demo"])
+
+    assert result.exit_code == 0
+    mock_tmux_manager.assert_called_once()
+
+
+def test_run_no_tmux_flag_overrides_config_to_direct() -> None:
+    fake = FakeSecretSource(
+        {
+            ("adda-dev:github", "demo-token"): "ghp_secret_token",
+            ("adda-dev:anthropic", "oauth"): "claude_oauth_token",
+        }
+    )
+    mock_config = _make_tmux_config(SessionModeChoice.tmux)
+    mock_project_repo = MagicMock()
+    mock_project_repo.get.return_value = _make_project(fake)
+    mock_backend_repo = MagicMock()
+    mock_backend_repo.get.return_value = _make_backend(fake)
+    mock_session_manager = MagicMock()
+    mock_session_manager.launch.return_value = MagicMock(session_id="adda-dev-session-test0001")
+    fake_engine = FakeContainerEngine()
+    mock_direct_manager = MagicMock(return_value=mock_session_manager)
+
+    with (
+        patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
+        patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
+        patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
+        patch("adda_dev.infra.cli.LlmConfigProviderRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.DirectSessionManager", mock_direct_manager),
+    ):
+        result = runner.invoke(app, ["run", "demo", "--no-tmux"])
+
+    assert result.exit_code == 0
+    mock_direct_manager.assert_called_once()
+
+
+def test_run_tmux_flag_overrides_config_to_tmux() -> None:
+    fake = FakeSecretSource(
+        {
+            ("adda-dev:github", "demo-token"): "ghp_secret_token",
+            ("adda-dev:anthropic", "oauth"): "claude_oauth_token",
+        }
+    )
+    mock_config = _make_tmux_config(SessionModeChoice.direct)
+    mock_project_repo = MagicMock()
+    mock_project_repo.get.return_value = _make_project(fake)
+    mock_backend_repo = MagicMock()
+    mock_backend_repo.get.return_value = _make_backend(fake)
+    mock_session_manager = MagicMock()
+    mock_session_manager.launch.return_value = MagicMock(session_id="adda-dev-session-test0001")
+    fake_engine = FakeContainerEngine()
+    mock_tmux_server = MagicMock()
+    mock_tmux_manager = MagicMock(return_value=mock_session_manager)
+
+    with (
+        patch("adda_dev.infra.cli.load_app_config", return_value=mock_config),
+        patch("adda_dev.infra.cli.create_engine", return_value=fake_engine),
+        patch("adda_dev.infra.cli.TomlProjectRepository", return_value=mock_project_repo),
+        patch("adda_dev.infra.cli.LlmConfigProviderRepository", return_value=mock_backend_repo),
+        patch("adda_dev.infra.cli.TmuxServer", return_value=mock_tmux_server),
+        patch("adda_dev.infra.cli.TmuxSessionManager", mock_tmux_manager),
+    ):
+        result = runner.invoke(app, ["run", "demo", "--tmux"])
+
+    assert result.exit_code == 0
+    mock_tmux_manager.assert_called_once()
