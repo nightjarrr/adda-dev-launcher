@@ -148,17 +148,15 @@ class TmuxSessionManager(SessionManager):
     def _set_tmux_session(self, session: TmuxSession) -> None:
         self._tmux_session = session
 
-    def create_window(self, name: str) -> Window:
+    def _create_window(self, name: str) -> Window:
         if self._tmux_session is None:
             return TmuxPrimaryWindow(name, self._server, self._session, self, self._output)
         return TmuxWindow(name, self._tmux_session)
 
     def _open_secondary_windows(self, session: Session, spec: ContractSpec) -> None:
         logs_window = self.create_window("adda-dev proxy logs")
-        self._windows.append(logs_window)
         self._sidecar.watch_logs(logs_window)
         shell_window = self.create_window("adda-dev shell")
-        self._windows.append(shell_window)
         self._container.exec_interactive_shell(shell_window)
 
     def _teardown(self) -> None:

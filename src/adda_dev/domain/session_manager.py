@@ -44,7 +44,6 @@ class SessionManager(abc.ABC):
         host_socket = self._sidecar.start(session)
         spec = draft.finalize(host_socket)
         primary = self.create_window("adda-dev primary")
-        self._windows.append(primary)
         self._container.start(session, spec, primary)
         self._open_secondary_windows(session, spec)
         self._output.ruler(f"Running container {spec.image}")
@@ -65,9 +64,15 @@ class SessionManager(abc.ABC):
                 s.done("deleted")
         self._output.blank()
 
-    @abc.abstractmethod
     def create_window(self, name: str) -> Window:
-        """Return a new Window for the given session name."""
+        """Return a new Window, automatically tracked for teardown."""
+        window = self._create_window(name)
+        self._windows.append(window)
+        return window
+
+    @abc.abstractmethod
+    def _create_window(self, name: str) -> Window:
+        """Create and return a new Window for the given name."""
 
     def _open_secondary_windows(self, session: Session, spec: ContractSpec) -> None:
         """Hook: open extra windows (e.g. shell, logs). No-op for Direct mode."""

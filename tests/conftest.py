@@ -284,7 +284,7 @@ class FakeSessionManager(SessionManager):
         self.launched: list[tuple[str, ContractSpecDraft]] = []
         self.terminated: int = 0
 
-    def create_window(self, name: str) -> Window:
+    def _create_window(self, name: str) -> Window:
         return _FakeWindow(name)
 
     def _launch(self, project_name: str, draft: ContractSpecDraft) -> None:

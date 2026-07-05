@@ -687,7 +687,7 @@ def test_envoy_sidecar_watch_logs_calls_logs_f_with_container_name(tmp_path: Pat
     logs_f_calls = [c for c in eng.calls if c[0] == "logs_f"]
     assert len(logs_f_calls) == 1
     assert logs_f_calls[0][1] == f"{session.session_id}-proxy"
-    assert ("Proxy log viewer", "streaming") in output.step_calls
+    assert ("Proxy log viewer", "opened") in output.step_calls
 
 
 def test_envoy_sidecar_watch_logs_before_start_is_noop() -> None:

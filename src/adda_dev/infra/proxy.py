@@ -112,7 +112,7 @@ class EnvoySidecar(ProxySidecar):
             return
         with self._output.step("Proxy log viewer") as s:
             self._engine.logs_f(WindowedRunner(window), self._container_name)
-            s.done("streaming")
+            s.done("opened")
 
     # Private methods
 
