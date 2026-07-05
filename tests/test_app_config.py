@@ -51,7 +51,6 @@ def test_app_config_defaults() -> None:
     assert cfg.container_engine == ContainerEngineChoice.docker
     assert cfg.envoy_image == DEFAULT_ENVOY_IMAGE
     assert cfg.envoy_image == "envoyproxy/envoy:v1.33.14"
-    assert cfg.tmux_config_path is None
     assert cfg.llm.anthropic.secret_name == "oauth"
     assert cfg.llm.deepseek.secret_name == "apikey"
     assert cfg.project_defaults.tmpfs.home == "512m"
@@ -179,18 +178,3 @@ def test_load_app_config_partial_tmpfs_defaults(tmp_path: Path, monkeypatch: pyt
     # other fields retain built-in defaults
     assert cfg.project_defaults.tmpfs.workspace == "256m"
     assert cfg.project_defaults.tmpfs.tmp == "256m"
-
-
-# ---------------------------------------------------------------------------
-# load_app_config — tmux_config_path
-# ---------------------------------------------------------------------------
-
-
-def test_load_app_config_tmux_config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    config_root = tmp_path / "adda-dev"
-    config_root.mkdir()
-    config_file = config_root / "config.toml"
-    config_file.write_text('tmux_config_path = "/home/user/.tmux.conf"\n')
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    cfg = load_app_config()
-    assert cfg.tmux_config_path == Path("/home/user/.tmux.conf")
