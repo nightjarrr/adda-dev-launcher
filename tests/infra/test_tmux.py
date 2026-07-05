@@ -10,7 +10,16 @@ from pathlib import Path
 import pytest
 
 from adda_dev.domain.session import Session
-from adda_dev.infra.tmux import _BUNDLED_CONFIG, TMUX_SERVER_NAME, TmuxError, TmuxServer, TmuxSession
+from adda_dev.infra.tmux import (
+    _BUNDLED_CONFIG,
+    TMUX_SERVER_NAME,
+    TmuxError,
+    TmuxPrimaryWindow,
+    TmuxServer,
+    TmuxSession,
+    TmuxSessionManager,
+    TmuxWindow,
+)
 
 # ---------------------------------------------------------------------------
 # Fake tmux binary fixture helpers
@@ -390,3 +399,205 @@ esac
     TmuxServer()
     ts = TmuxSession("adda-dev-session-abc12345")
     ts.kill()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared by TmuxPrimaryWindow and TmuxSessionManager tests
+# ---------------------------------------------------------------------------
+
+
+def _make_manager(fake_tmux_path: Path) -> TmuxSessionManager:
+    """Build a TmuxSessionManager backed by fake doubles."""
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    server = TmuxServer()
+    return TmuxSessionManager(
+        server,
+        FakeSessionRepository(),
+        FakeOutput(),
+        FakeProxySidecar(),
+        FakeAddaPrimaryContainer(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# TmuxPrimaryWindow
+# ---------------------------------------------------------------------------
+
+
+def test_tmuxprimarywindow_open_invokes_new_session(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session("adda-dev-session-abc12345")
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    window.open(["bash"])
+    argv = _read_argv(fake_tmux_path)
+    assert "new-session" in argv
+    assert "adda-dev-session-abc12345" in argv
+    assert "main" in argv
+    assert "bash" in argv
+
+
+def test_tmuxprimarywindow_open_sets_manager_tmux_session(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session("adda-dev-session-abc12345")
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    assert manager._tmux_session is None
+    window.open(["bash"])
+    assert manager._tmux_session is not None
+
+
+def test_tmuxprimarywindow_open_emits_session_started_step(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session("adda-dev-session-abc12345")
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    window.open(["bash"])
+    assert ("tmux session", "started") in output.step_calls
+
+
+def test_tmuxprimarywindow_attach_invokes_attach_session(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session("adda-dev-session-abc12345")
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    window.open(["bash"])
+    window.attach()
+    argv = _read_argv(fake_tmux_path)
+    assert "attach-session" in argv
+    assert "adda-dev-session-abc12345" in argv
+
+
+def test_tmuxprimarywindow_close_invokes_kill_window(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session("adda-dev-session-abc12345")
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    window.open(["bash"])
+    window.close()
+    argv = _read_argv(fake_tmux_path)
+    assert "kill-window" in argv
+    assert "adda-dev-session-abc12345:main" in argv
+
+
+def test_tmuxprimarywindow_close_before_open_is_noop(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session("adda-dev-session-abc12345")
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    window.close()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# TmuxWindow
+# ---------------------------------------------------------------------------
+
+
+def test_tmuxwindow_open_invokes_new_window(fake_tmux_path: Path) -> None:
+    server = TmuxServer()
+    ts = server.new_session(_make_session("adda-dev-session-abc12345"), "main", ["bash"])
+    window = TmuxWindow("extra", ts)
+    window.open(["bash"])
+    argv = _read_argv(fake_tmux_path)
+    assert "new-window" in argv
+    assert "extra" in argv
+
+
+def test_tmuxwindow_attach_invokes_attach_session(fake_tmux_path: Path) -> None:
+    server = TmuxServer()
+    ts = server.new_session(_make_session("adda-dev-session-abc12345"), "main", ["bash"])
+    window = TmuxWindow("extra", ts)
+    window.attach()
+    argv = _read_argv(fake_tmux_path)
+    assert "attach-session" in argv
+    assert "adda-dev-session-abc12345" in argv
+
+
+def test_tmuxwindow_close_invokes_kill_window(fake_tmux_path: Path) -> None:
+    server = TmuxServer()
+    ts = server.new_session(_make_session("adda-dev-session-abc12345"), "main", ["bash"])
+    window = TmuxWindow("extra", ts)
+    window.close()
+    argv = _read_argv(fake_tmux_path)
+    assert "kill-window" in argv
+    assert "adda-dev-session-abc12345:extra" in argv
+
+
+# ---------------------------------------------------------------------------
+# TmuxSessionManager
+# ---------------------------------------------------------------------------
+
+
+def test_tmuxsessionmanager_init_emits_kv_for_version(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    output = FakeOutput()
+    TmuxSessionManager(TmuxServer(), FakeSessionRepository(), output, FakeProxySidecar(), FakeAddaPrimaryContainer())
+    assert ("tmux", "3.4") in output.kv_calls
+
+
+def test_tmuxsessionmanager_create_window_returns_tmux_primary_window(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    manager = TmuxSessionManager(
+        TmuxServer(), FakeSessionRepository(), FakeOutput(), FakeProxySidecar(), FakeAddaPrimaryContainer()
+    )
+    # _session must be set before create_window is callable
+    manager._session = _make_session("adda-dev-session-abc12345")
+    window = manager.create_window("main")
+    assert isinstance(window, TmuxPrimaryWindow)
+
+
+def test_tmuxsessionmanager_teardown_kills_session(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    output = FakeOutput()
+    manager = TmuxSessionManager(TmuxServer(), FakeSessionRepository(), output, FakeProxySidecar(), FakeAddaPrimaryContainer())
+    # Pre-set a tmux session so teardown takes the kill-session branch
+    manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
+    manager._teardown()
+    argv = _read_argv(fake_tmux_path)
+    assert "kill-session" in argv
+    assert ("tmux session", "stopped") in output.step_calls
+
+
+def test_tmuxsessionmanager_teardown_without_session_is_noop(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    output = FakeOutput()
+    manager = TmuxSessionManager(TmuxServer(), FakeSessionRepository(), output, FakeProxySidecar(), FakeAddaPrimaryContainer())
+    assert manager._tmux_session is None
+    manager._teardown()  # must not raise
+    assert output.step_calls == []
+
+
+def test_tmuxsessionmanager_init_raises_on_reentry(fake_tmux_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    monkeypatch.setenv("TMUX", f"/tmp/tmux-1000/{TMUX_SERVER_NAME},12345,0")
+    with pytest.raises(TmuxError, match="does not support running from inside"):
+        TmuxSessionManager(TmuxServer(), FakeSessionRepository(), FakeOutput(), FakeProxySidecar(), FakeAddaPrimaryContainer())
+
+
+def test_tmuxsessionmanager_create_window_returns_tmux_window_when_session_exists(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    manager = TmuxSessionManager(
+        TmuxServer(), FakeSessionRepository(), FakeOutput(), FakeProxySidecar(), FakeAddaPrimaryContainer()
+    )
+    manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
+    window = manager.create_window("extra")
+    assert isinstance(window, TmuxWindow)

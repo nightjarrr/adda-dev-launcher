@@ -6,8 +6,12 @@ import importlib.resources
 import os
 from pathlib import Path
 
-from ..common import AddaDevError
-from ..domain.session import Session
+from ..common import AddaDevError, Output
+from ..domain.adda_container import AddaPrimaryContainer
+from ..domain.proxy import ProxySidecar
+from ..domain.session import Session, SessionRepository
+from ..domain.session_manager import SessionManager
+from ..domain.window import Window
 from .process import CapturedOutputRunner, DefaultRunner, ProcessError
 
 TMUX_SERVER_NAME = "adda-dev"
@@ -125,3 +129,88 @@ class TmuxServer:
             handle.wait()
         except Exception:  # noqa: BLE001
             pass
+
+
+class TmuxSessionManager(SessionManager):
+    """SessionManager that creates a tmux session for the primary window and tears it down on exit."""
+
+    def __init__(
+        self,
+        server: TmuxServer,
+        session_repo: SessionRepository,
+        output: Output,
+        sidecar: ProxySidecar,
+        container: AddaPrimaryContainer,
+    ) -> None:
+        super().__init__(session_repo, output, sidecar, container)
+        self._server = server
+        self._tmux_session: TmuxSession | None = None
+        output.kv("tmux", server.version)
+        self._server.ensure_no_reentry()
+
+    def _set_tmux_session(self, session: TmuxSession) -> None:
+        self._tmux_session = session
+
+    def create_window(self, name: str) -> Window:
+        if self._tmux_session is None:
+            return TmuxPrimaryWindow(name, self._server, self._session, self, self._output)
+        return TmuxWindow(name, self._tmux_session)
+
+    def _teardown(self) -> None:
+        if self._tmux_session is not None:
+            with self._output.step("tmux session") as s:
+                self._tmux_session.kill()
+                s.done("stopped")
+
+
+class TmuxPrimaryWindow(Window):
+    """Primary window created by TmuxSessionManager; open() creates the tmux session."""
+
+    def __init__(
+        self,
+        name: str,
+        server: TmuxServer,
+        domain_session: Session | None,
+        manager: TmuxSessionManager,
+        output: Output,
+    ) -> None:
+        super().__init__(name)
+        self._server = server
+        self._domain_session = domain_session
+        self._manager = manager
+        self._output = output
+        self._tmux: TmuxSession | None = None
+
+    def open(self, cmd: list[str], env: dict[str, str] | None = None) -> None:
+        if self._domain_session is None:
+            raise TmuxError("open() called before session was initialized")
+        with self._output.step("tmux session") as s:
+            self._tmux = self._server.new_session(self._domain_session, self.name, cmd, env)
+            s.done("started")
+        self._manager._set_tmux_session(self._tmux)
+
+    def attach(self) -> None:
+        if self._tmux is None:
+            raise TmuxError("attach() called before open()")
+        self._tmux.attach()
+
+    def close(self) -> None:
+        if self._tmux is not None:
+            self._tmux.kill_window(self.name)
+
+
+class TmuxWindow(Window):
+    """Secondary window added to an existing tmux session."""
+
+    def __init__(self, name: str, tmux_session: TmuxSession) -> None:
+        super().__init__(name)
+        self._tmux = tmux_session
+
+    def open(self, cmd: list[str], env: dict[str, str] | None = None) -> None:
+        self._tmux.new_window(self.name, cmd, env)
+
+    def attach(self) -> None:
+        self._tmux.attach()
+
+    def close(self) -> None:
+        self._tmux.kill_window(self.name)
