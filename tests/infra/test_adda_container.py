@@ -7,12 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from adda_dev.domain.adda_container import ContainerError
 from adda_dev.domain.contract import ContractProcessParams, ContractSpec, ContractTranslator
 from adda_dev.domain.session import Session
 from adda_dev.domain.window import Window
 from adda_dev.infra.adda_container import AddaPrimaryContainerImpl
-from adda_dev.infra.process import ProcessHandle, ProcessRunner
+from adda_dev.infra.process import ProcessHandle, ProcessRunError, ProcessRunner
 from adda_dev.infra.window import WindowedRunner
 from tests.conftest import FakeContainerEngine, FakeOutput
 
@@ -49,6 +48,9 @@ def _make_spec() -> ContractSpec:
 
 
 class _FakeHandle(ProcessHandle):
+    def __init__(self) -> None:
+        super().__init__([])
+
     def wait(self) -> int:
         return 0
 
@@ -342,9 +344,9 @@ class _FailingPullEngine(FakeContainerEngine):
         return _FailingPullHandle()
 
 
-def test_addaprimarycontainer_start_raises_container_error_on_pull_failure() -> None:
+def test_addaprimarycontainer_start_raises_process_run_error_on_pull_failure() -> None:
     engine = _FailingPullEngine()
     impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput())
-    with pytest.raises(ContainerError) as exc_info:
+    with pytest.raises(ProcessRunError) as exc_info:
         impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     assert _TEST_IMAGE in str(exc_info.value.args[0])

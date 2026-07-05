@@ -107,6 +107,9 @@ def test_dockerengine_nonzero_info_exit_raises_unavailable(tmp_path: Path, monke
 
 
 class _RecordingHandle(ProcessHandle):
+    def __init__(self) -> None:
+        super().__init__([])
+
     def wait(self) -> int:
         return 0
 

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from adda_dev.domain.session import Session
+from adda_dev.infra.process import ProcessRunError
 from adda_dev.infra.tmux import (
     _BUNDLED_CONFIG,
     TMUX_SERVER_NAME,
@@ -208,7 +209,7 @@ esac
     tmux_path.chmod(tmux_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     monkeypatch.setenv("PATH", str(bin_dir) + ":" + os.environ.get("PATH", ""))
     server = TmuxServer()
-    with pytest.raises(TmuxError, match="new-session failed"):
+    with pytest.raises(ProcessRunError, match="new-session failed"):
         server.new_session(_make_session(), "main", ["bash"])
 
 
@@ -297,7 +298,7 @@ exit 1
     tmux_path.chmod(tmux_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     monkeypatch.setenv("PATH", str(bin_dir) + ":" + os.environ.get("PATH", ""))
     ts = TmuxSession("adda-dev-session-abc12345")
-    with pytest.raises(TmuxError, match="new-window failed"):
+    with pytest.raises(ProcessRunError, match="new-window failed"):
         ts.new_window("extra", ["bash"])
 
 

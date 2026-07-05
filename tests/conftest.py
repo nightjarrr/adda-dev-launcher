@@ -137,6 +137,9 @@ class FakeSessionRepository(SessionRepository):
 class _FakeProcessHandle(ProcessHandle):
     """Minimal ProcessHandle whose wait() returns 0."""
 
+    def __init__(self) -> None:
+        super().__init__([])
+
     def wait(self) -> int:
         return 0
 

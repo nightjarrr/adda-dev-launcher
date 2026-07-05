@@ -11,9 +11,9 @@ from pydantic import BaseModel, ConfigDict
 class AddaDevError(Exception):
     """Root exception for all adda-dev domain errors."""
 
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str, **details: str | None) -> None:
         super().__init__(message)
-        self.details: list[tuple[str, str]] = []
+        self.details: list[tuple[str, str]] = [(k, v) for k, v in details.items() if v]
 
     def __str__(self) -> str:
         parts = [super().__str__()]
