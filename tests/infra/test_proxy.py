@@ -12,6 +12,7 @@ import pytest
 
 from adda_dev.domain.proxy import ProxyError
 from adda_dev.domain.session import Session
+from adda_dev.domain.window import Window
 from adda_dev.infra.process import ProcessHandle, ProcessRunError
 from adda_dev.infra.proxy import (
     ENVOY_SOCKET_CONTAINER_PATH,
@@ -634,3 +635,64 @@ def test_envoy_sidecar_stop_rm_uses_force(tmp_path: Path) -> None:
     assert rm_calls
     _, (name, force) = rm_calls[0]
     assert force is True
+
+
+# ---------------------------------------------------------------------------
+# EnvoySidecar.watch_logs
+# ---------------------------------------------------------------------------
+
+
+class _FakeWindow(Window):
+    """Window test double that records calls without running real processes."""
+
+    def open(self, cmd: list[str], env: dict[str, str] | None = None) -> None:
+        pass
+
+    def attach(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+def test_envoy_sidecar_watch_logs_calls_logs_f_with_container_name(tmp_path: Path) -> None:
+    output = FakeOutput()
+    socket_path = tmp_path / "proxy_socket" / "proxy.sock"
+
+    class _SocketCreatingEngine(FakeContainerEngine):
+        def run_d(  # type: ignore[override]
+            self,
+            runner: object,
+            image: str,
+            name: str,
+            args: list[str],
+            env: dict[str, str] | None = None,
+            cmd: list[str] | None = None,
+            remove: bool = False,
+        ) -> _FakeHandle:
+            self.calls.append(("run_d", (image, name, args, env, cmd, remove)))
+            _bind_unix_socket(socket_path)
+            return _FakeHandle(rc=0)
+
+        def inspect(self, runner: object, name: str) -> _FakeHandle:  # type: ignore[override]
+            self.calls.append(("inspect", name))
+            state = [{"State": {"Running": True}}]
+            return _FakeHandle(rc=0, out=json.dumps(state))
+
+    eng = _SocketCreatingEngine()
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, output, sleep=lambda _: None, attempts=5)
+    session = _make_session(tmp_path)
+    sidecar.start(session)
+    sidecar.watch_logs(_FakeWindow("logs"))
+    logs_f_calls = [c for c in eng.calls if c[0] == "logs_f"]
+    assert len(logs_f_calls) == 1
+    assert logs_f_calls[0][1] == f"{session.session_id}-proxy"
+    assert ("Proxy log viewer", "streaming") in output.step_calls
+
+
+def test_envoy_sidecar_watch_logs_before_start_is_noop() -> None:
+    eng = FakeContainerEngine()
+    sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None)
+    sidecar.watch_logs(_FakeWindow("logs"))
+    logs_f_calls = [c for c in eng.calls if c[0] == "logs_f"]
+    assert len(logs_f_calls) == 0

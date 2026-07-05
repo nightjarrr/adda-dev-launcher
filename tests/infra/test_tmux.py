@@ -602,3 +602,75 @@ def test_tmuxsessionmanager_create_window_returns_tmux_window_when_session_exist
     manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
     window = manager.create_window("extra")
     assert isinstance(window, TmuxWindow)
+
+
+# ---------------------------------------------------------------------------
+# TmuxSessionManager._open_secondary_windows
+# ---------------------------------------------------------------------------
+
+
+def _make_spec() -> object:
+    """Build a minimal ContractSpec for use in _open_secondary_windows tests."""
+    from pathlib import Path
+
+    from adda_dev.domain.contract import ContractSpec
+    from adda_dev.domain.github import GitHub
+    from adda_dev.domain.llm import AnthropicProvider
+    from adda_dev.domain.tmpfs import TmpfsSizes
+    from tests.conftest import FakeSecretSource
+
+    source = FakeSecretSource({("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "key"): "sk_test"})
+    gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
+    provider = AnthropicProvider(secret_name="key", source=source)
+    return ContractSpec(
+        github=gh,
+        provider=provider,
+        image="ghcr.io/nightjarrr/adda-dev:v0.1.0",
+        tmpfs=TmpfsSizes(),
+        proxy_socket_host_path=Path("/tmp/fake-proxy.sock"),
+    )
+
+
+def test_tmuxsessionmanager_open_secondary_windows_appends_two_windows(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    container = FakeAddaPrimaryContainer()
+    sidecar = FakeProxySidecar()
+    manager = TmuxSessionManager(TmuxServer(), FakeSessionRepository(), FakeOutput(), sidecar, container)
+    manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
+    manager._open_secondary_windows(_make_session(), _make_spec())  # type: ignore[arg-type]
+    assert len(manager._windows) == 2
+
+
+def test_tmuxsessionmanager_open_secondary_windows_calls_sidecar_watch_logs(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    container = FakeAddaPrimaryContainer()
+    sidecar = FakeProxySidecar()
+    manager = TmuxSessionManager(TmuxServer(), FakeSessionRepository(), FakeOutput(), sidecar, container)
+    manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
+    manager._open_secondary_windows(_make_session(), _make_spec())  # type: ignore[arg-type]
+    assert sidecar.watch_logs_calls == [manager._windows[0]]
+
+
+def test_tmuxsessionmanager_open_secondary_windows_calls_container_exec_shell(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    container = FakeAddaPrimaryContainer()
+    sidecar = FakeProxySidecar()
+    manager = TmuxSessionManager(TmuxServer(), FakeSessionRepository(), FakeOutput(), sidecar, container)
+    manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
+    manager._open_secondary_windows(_make_session(), _make_spec())  # type: ignore[arg-type]
+    assert container.exec_interactive_shell_calls == [manager._windows[1]]
+
+
+def test_tmuxsessionmanager_open_secondary_windows_creates_tmux_windows(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    container = FakeAddaPrimaryContainer()
+    sidecar = FakeProxySidecar()
+    manager = TmuxSessionManager(TmuxServer(), FakeSessionRepository(), FakeOutput(), sidecar, container)
+    manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
+    manager._open_secondary_windows(_make_session(), _make_spec())  # type: ignore[arg-type]
+    assert isinstance(manager._windows[0], TmuxWindow)
+    assert isinstance(manager._windows[1], TmuxWindow)

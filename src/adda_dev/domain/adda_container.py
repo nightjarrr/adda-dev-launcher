@@ -32,3 +32,7 @@ class AddaPrimaryContainer(abc.ABC):
         Safe to call before start() completes (no-op). Tolerant of the container already
         being gone (e.g. removed by --rm when the session exited cleanly).
         """
+
+    @abc.abstractmethod
+    def exec_interactive_shell(self, window: Window) -> None:
+        """Open an interactive shell in the running container into the given window."""
