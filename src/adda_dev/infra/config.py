@@ -3,7 +3,6 @@ Application configuration: host settings DTOs and load_app_config().
 """
 
 from enum import StrEnum
-from pathlib import Path
 
 from ..common import StrictModel
 from ..domain.tmpfs import TmpfsSizes
@@ -35,7 +34,6 @@ class AppConfig(StrictModel):
 
     container_engine: ContainerEngineChoice = ContainerEngineChoice.docker
     envoy_image: str = DEFAULT_ENVOY_IMAGE
-    tmux_config_path: Path | None = None
     llm: LlmConfig = LlmConfig()
     project_defaults: ProjectDefaults = ProjectDefaults()
 
