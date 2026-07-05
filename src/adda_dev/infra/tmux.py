@@ -8,7 +8,6 @@ from pathlib import Path
 
 from ..common import AddaDevError, Output
 from ..domain.adda_container import AddaPrimaryContainer
-from ..domain.contract import ContractSpecDraft
 from ..domain.proxy import ProxySidecar
 from ..domain.session import Session, SessionRepository
 from ..domain.session_manager import SessionManager
@@ -147,25 +146,21 @@ class TmuxSessionManager(SessionManager):
         self._server = server
         self._tmux_session: TmuxSession | None = None
         output.kv("tmux", server.version)
+        self._server.ensure_no_reentry()
 
     def _set_tmux_session(self, session: TmuxSession) -> None:
         self._tmux_session = session
 
-    def _launch(self, project_name: str, draft: ContractSpecDraft) -> None:
-        self._server.ensure_no_reentry()
-        super()._launch(project_name, draft)
-
     def create_window(self, name: str) -> Window:
-        if self._session is None:
-            raise TmuxError("create_window called before session was initialized")
-        return TmuxPrimaryWindow(name, self._server, self._session, self, self._output)
+        if self._tmux_session is None:
+            return TmuxPrimaryWindow(name, self._server, self._session, self, self._output)
+        return TmuxWindow(name, self._tmux_session)
 
     def _teardown(self) -> None:
-        with self._output.step("tmux server") as s:
-            if self._tmux_session is not None:
+        if self._tmux_session is not None:
+            with self._output.step("tmux session") as s:
                 self._tmux_session.kill()
-            self._server.kill_server()
-            s.done("stopped")
+                s.done("stopped")
 
 
 class TmuxPrimaryWindow(Window):
@@ -175,7 +170,7 @@ class TmuxPrimaryWindow(Window):
         self,
         name: str,
         server: TmuxServer,
-        domain_session: Session,
+        domain_session: Session | None,
         manager: TmuxSessionManager,
         output: Output,
     ) -> None:
@@ -187,6 +182,8 @@ class TmuxPrimaryWindow(Window):
         self._tmux: TmuxSession | None = None
 
     def open(self, cmd: list[str], env: dict[str, str] | None = None) -> None:
+        if self._domain_session is None:
+            raise TmuxError("open() called before session was initialized")
         with self._output.step("tmux session") as s:
             self._tmux = self._server.new_session(self._domain_session, self.name, cmd, env)
             s.done("started")

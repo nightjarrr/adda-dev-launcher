@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 
 from adda_dev.domain.session import Session
-from adda_dev.domain.window import Window
 from adda_dev.infra.tmux import (
     _BUNDLED_CONFIG,
     TMUX_SERVER_NAME,
@@ -542,15 +541,6 @@ def test_tmuxwindow_close_invokes_kill_window(fake_tmux_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-class _FakeTmuxSessionManager(TmuxSessionManager):
-    """TmuxSessionManager subclass that substitutes _FakeWindow for the primary window."""
-
-    def create_window(self, name: str) -> Window:
-        from tests.conftest import _FakeWindow
-
-        return _FakeWindow(name)
-
-
 def test_tmuxsessionmanager_init_emits_kv_for_version(fake_tmux_path: Path) -> None:
     from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
 
@@ -571,7 +561,7 @@ def test_tmuxsessionmanager_create_window_returns_tmux_primary_window(fake_tmux_
     assert isinstance(window, TmuxPrimaryWindow)
 
 
-def test_tmuxsessionmanager_teardown_kills_session_then_server(fake_tmux_path: Path) -> None:
+def test_tmuxsessionmanager_teardown_kills_session(fake_tmux_path: Path) -> None:
     from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
 
     output = FakeOutput()
@@ -580,39 +570,34 @@ def test_tmuxsessionmanager_teardown_kills_session_then_server(fake_tmux_path: P
     manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
     manager._teardown()
     argv = _read_argv(fake_tmux_path)
-    # kill-server is the last command; kill-session must have been called previously
-    assert "kill-server" in argv
-    assert ("tmux server", "stopped") in output.step_calls
+    assert "kill-session" in argv
+    assert ("tmux session", "stopped") in output.step_calls
 
 
-def test_tmuxsessionmanager_teardown_without_session_kills_server(fake_tmux_path: Path) -> None:
+def test_tmuxsessionmanager_teardown_without_session_is_noop(fake_tmux_path: Path) -> None:
     from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
 
     output = FakeOutput()
     manager = TmuxSessionManager(TmuxServer(), FakeSessionRepository(), output, FakeProxySidecar(), FakeAddaPrimaryContainer())
     assert manager._tmux_session is None
-    manager._teardown()
-    argv = _read_argv(fake_tmux_path)
-    assert "kill-server" in argv
-    assert ("tmux server", "stopped") in output.step_calls
+    manager._teardown()  # must not raise
+    assert output.step_calls == []
 
 
-def test_tmuxsessionmanager_launch_raises_on_reentry(fake_tmux_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from adda_dev.domain.contract import ContractSpecDraft
-    from adda_dev.domain.github import GitHub
-    from adda_dev.domain.llm import AnthropicProvider, LlmProvider
-    from adda_dev.domain.project import Project
-    from adda_dev.domain.tmpfs import TmpfsSizes
-    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSecretSource, FakeSessionRepository
+def test_tmuxsessionmanager_init_raises_on_reentry(fake_tmux_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
 
     monkeypatch.setenv("TMUX", f"/tmp/tmux-1000/{TMUX_SERVER_NAME},12345,0")
-    manager = _FakeTmuxSessionManager(
+    with pytest.raises(TmuxError, match="does not support running from inside"):
+        TmuxSessionManager(TmuxServer(), FakeSessionRepository(), FakeOutput(), FakeProxySidecar(), FakeAddaPrimaryContainer())
+
+
+def test_tmuxsessionmanager_create_window_returns_tmux_window_when_session_exists(fake_tmux_path: Path) -> None:
+    from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySidecar, FakeSessionRepository
+
+    manager = TmuxSessionManager(
         TmuxServer(), FakeSessionRepository(), FakeOutput(), FakeProxySidecar(), FakeAddaPrimaryContainer()
     )
-    source = FakeSecretSource({("adda-dev:github", "gh-token"): "ghp_test", ("adda-dev:anthropic", "claude-key"): "sk-test"})
-    gh = GitHub(owner="nightjarrr", repo="adda-dev-launcher", secret_name="gh-token", source=source)
-    provider = AnthropicProvider(secret_name="claude-key", source=source)
-    project = Project(name="test", github=gh, image="test-image", provider=LlmProvider.anthropic, tmpfs=TmpfsSizes())
-    draft = ContractSpecDraft.initialize(project, provider)
-    with pytest.raises(TmuxError, match="does not support running from inside"):
-        manager.run("test-project", draft)
+    manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
+    window = manager.create_window("extra")
+    assert isinstance(window, TmuxWindow)
