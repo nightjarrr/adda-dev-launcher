@@ -156,7 +156,8 @@ class TmuxSessionManager(SessionManager):
         super()._launch(project_name, draft)
 
     def create_window(self, name: str) -> Window:
-        assert self._session is not None
+        if self._session is None:
+            raise TmuxError("create_window called before session was initialized")
         return TmuxPrimaryWindow(name, self._server, self._session, self, self._output)
 
     def _teardown(self) -> None:
@@ -192,7 +193,8 @@ class TmuxPrimaryWindow(Window):
         self._manager._set_tmux_session(self._tmux)
 
     def attach(self) -> None:
-        assert self._tmux is not None
+        if self._tmux is None:
+            raise TmuxError("attach() called before open()")
         self._tmux.attach()
 
     def close(self) -> None:

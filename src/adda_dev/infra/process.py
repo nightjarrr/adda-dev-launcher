@@ -108,13 +108,15 @@ class _CapturedHandle(ProcessHandle):
     def stdout(self) -> str:
         if self._returncode is None:
             raise RuntimeError("stdout is not available before wait()")
-        assert self._stdout is not None
+        if self._stdout is None:
+            raise RuntimeError("stdout was not captured")
         return self._stdout
 
     def stderr(self) -> str:
         if self._returncode is None:
             raise RuntimeError("stderr is not available before wait()")
-        assert self._stderr is not None
+        if self._stderr is None:
+            raise RuntimeError("stderr was not captured")
         return self._stderr
 
 
