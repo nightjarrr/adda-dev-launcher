@@ -90,9 +90,9 @@ class AddaPrimaryContainerImpl(AddaPrimaryContainer):
 
     # Private methods
 
-    def _wait_for_running(self, name: str) -> None:
+    def _wait_for_running(self, name: str, attempts: int = _CONTAINER_READY_ATTEMPTS) -> None:
         """Poll inspect until the container reports Running=true or attempts are exhausted."""
-        for _ in range(_CONTAINER_READY_ATTEMPTS):
+        for _ in range(attempts):
             handle = self._engine.inspect(self._teardown_runner, name)
             if handle.wait() == 0:
                 try:

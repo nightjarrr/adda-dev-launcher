@@ -390,6 +390,14 @@ def test_addaprimarycontainerimpl_exec_interactive_shell_calls_exec_it_when_runn
     assert ("ADDA Dev Runtime shell", "ready") in output.step_calls
 
 
+def test_addaprimarycontainerimpl_wait_for_running_exhausts_attempts_without_raising() -> None:
+    engine = FakeContainerEngine()  # inspect returns empty stdout → JSON parse fails → never Running
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput(), sleep=lambda _: None)
+    impl._wait_for_running("some-container", attempts=3)  # must not raise
+    inspect_calls = [c for c in engine.calls if c[0] == "inspect"]
+    assert len(inspect_calls) == 3
+
+
 def test_addaprimarycontainerimpl_exec_interactive_shell_before_start_is_noop() -> None:
     engine = _RunningInspectEngine()
     output = FakeOutput()
