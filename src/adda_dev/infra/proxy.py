@@ -12,8 +12,10 @@ from pathlib import Path, PurePosixPath
 from ..common import Output
 from ..domain.proxy import ProxyError, ProxySidecar
 from ..domain.session import Session
+from ..domain.window import Window
 from .container import ContainerEngine
 from .process import CapturedOutputRunner
+from .window import WindowedRunner
 
 # Single source of truth for the Envoy-internal socket path.
 ENVOY_SOCKET_CONTAINER_PATH: str = "/run/adda-dev-proxy/proxy.sock"
@@ -103,6 +105,14 @@ class EnvoySidecar(ProxySidecar):
             self._engine.rm(self._runner, name, force=True).wait()
         except Exception:  # noqa: BLE001
             pass
+
+    def watch_logs(self, window: Window) -> None:
+        """Stream sidecar logs into the given window."""
+        if self._container_name is None:
+            return
+        with self._output.step("Proxy log viewer") as s:
+            self._engine.logs_f(WindowedRunner(window), self._container_name)
+            s.done("opened")
 
     # Private methods
 

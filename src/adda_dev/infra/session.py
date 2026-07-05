@@ -80,5 +80,5 @@ class DirectWindow(Window):
 class DirectSessionManager(SessionManager):
     """SessionManager that runs commands directly in the current terminal (no tmux)."""
 
-    def create_window(self, name: str) -> Window:
+    def _create_window(self, name: str) -> Window:
         return DirectWindow(name)

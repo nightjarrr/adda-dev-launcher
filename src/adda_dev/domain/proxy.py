@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ..common import AddaDevError
 from .session import Session
+from .window import Window
 
 
 class ProxyError(AddaDevError):
@@ -23,3 +24,7 @@ class ProxySidecar(abc.ABC):
     @abc.abstractmethod
     def stop(self) -> None:
         """Stop and remove the sidecar, best-effort. Safe to call before start() completes."""
+
+    @abc.abstractmethod
+    def watch_logs(self, window: Window) -> None:
+        """Stream sidecar logs into the given window."""

@@ -239,6 +239,7 @@ class FakeProxySidecar(ProxySidecar):
         self._host_socket = host_socket or Path("/tmp/fake-proxy/proxy_socket/proxy.sock")
         self.start_calls: list[Session] = []
         self.stop_calls: int = 0
+        self.watch_logs_calls: list[Window] = []
 
     def start(self, session: Session) -> Path:
         self.start_calls.append(session)
@@ -247,6 +248,9 @@ class FakeProxySidecar(ProxySidecar):
     def stop(self) -> None:
         self.stop_calls += 1
 
+    def watch_logs(self, window: Window) -> None:
+        self.watch_logs_calls.append(window)
+
 
 class FakeAddaPrimaryContainer(AddaPrimaryContainer):
     """AddaPrimaryContainer test double that records start and stop calls."""
@@ -254,12 +258,16 @@ class FakeAddaPrimaryContainer(AddaPrimaryContainer):
     def __init__(self) -> None:
         self.start_calls: list[tuple[Session, ContractSpec, Window]] = []
         self.stop_calls: int = 0
+        self.exec_interactive_shell_calls: list[Window] = []
 
     def start(self, session: Session, spec: ContractSpec, window: Window) -> None:
         self.start_calls.append((session, spec, window))
 
     def stop(self) -> None:
         self.stop_calls += 1
+
+    def exec_interactive_shell(self, window: Window) -> None:
+        self.exec_interactive_shell_calls.append(window)
 
 
 class FakeSessionManager(SessionManager):
@@ -276,7 +284,7 @@ class FakeSessionManager(SessionManager):
         self.launched: list[tuple[str, ContractSpecDraft]] = []
         self.terminated: int = 0
 
-    def create_window(self, name: str) -> Window:
+    def _create_window(self, name: str) -> Window:
         return _FakeWindow(name)
 
     def _launch(self, project_name: str, draft: ContractSpecDraft) -> None:

@@ -48,7 +48,7 @@ class _FakeWindow(Window):
 class _FakeWindowManager(DirectSessionManager):
     """DirectSessionManager that creates FakeWindows to avoid real subprocess execution."""
 
-    def create_window(self, name: str) -> Window:
+    def _create_window(self, name: str) -> Window:
         return _FakeWindow(name)
 
 
@@ -196,7 +196,7 @@ def test_directsessionmanager_terminate_closes_windows() -> None:
             closed.append(self.name)
 
     class _TrackingManager(_FakeWindowManager):
-        def create_window(self, name: str) -> _TrackingWindow:
+        def _create_window(self, name: str) -> _TrackingWindow:
             return _TrackingWindow(name)
 
     repo = FakeSessionRepository()

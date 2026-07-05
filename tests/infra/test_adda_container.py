@@ -350,3 +350,59 @@ def test_addaprimarycontainer_start_raises_process_run_error_on_pull_failure() -
     with pytest.raises(ProcessRunError) as exc_info:
         impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
     assert _TEST_IMAGE in str(exc_info.value.args[0])
+
+
+# ---------------------------------------------------------------------------
+# AddaPrimaryContainerImpl.exec_interactive_shell
+# ---------------------------------------------------------------------------
+
+
+class _RunningInspectHandle(_FakeHandle):
+    """ProcessHandle whose stdout() returns a container Running=true JSON payload."""
+
+    def stdout(self) -> str:
+        import json
+
+        return json.dumps([{"State": {"Running": True}}])
+
+
+class _RunningInspectEngine(FakeContainerEngine):
+    """Engine that reports the container as running on inspect."""
+
+    def inspect(self, runner: ProcessRunner, name: str) -> _RunningInspectHandle:  # type: ignore[override]
+        self.calls.append(("inspect", name))
+        return _RunningInspectHandle()
+
+
+def test_addaprimarycontainerimpl_exec_interactive_shell_calls_exec_it_when_running() -> None:
+    from adda_dev.infra.adda_container import _INTERACTIVE_SHELL_CMD
+
+    engine = _RunningInspectEngine()
+    output = FakeOutput()
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), output, sleep=lambda _: None)
+    impl.start(_make_session(), _make_spec(), _FakeWindow("w"))
+    impl.exec_interactive_shell(_FakeWindow("shell"))
+    exec_it_calls = [c for c in engine.calls if c[0] == "exec_it"]
+    assert len(exec_it_calls) == 1
+    name, cmd = exec_it_calls[0][1]  # type: ignore[misc]
+    assert name == _TEST_SESSION_ID
+    assert cmd == [_INTERACTIVE_SHELL_CMD]
+    assert ("ADDA Dev Runtime shell", "ready") in output.step_calls
+
+
+def test_addaprimarycontainerimpl_wait_for_running_exhausts_attempts_without_raising() -> None:
+    engine = FakeContainerEngine()  # inspect returns empty stdout → JSON parse fails → never Running
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), FakeOutput(), sleep=lambda _: None)
+    impl._wait_for_running("some-container", attempts=3)  # must not raise
+    inspect_calls = [c for c in engine.calls if c[0] == "inspect"]
+    assert len(inspect_calls) == 3
+
+
+def test_addaprimarycontainerimpl_exec_interactive_shell_before_start_is_noop() -> None:
+    engine = _RunningInspectEngine()
+    output = FakeOutput()
+    impl = AddaPrimaryContainerImpl(engine, _FixedTranslator(), output, sleep=lambda _: None)
+    impl.exec_interactive_shell(_FakeWindow("shell"))
+    exec_it_calls = [c for c in engine.calls if c[0] == "exec_it"]
+    assert len(exec_it_calls) == 0
+    assert output.step_calls == []
