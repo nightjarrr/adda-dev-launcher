@@ -264,6 +264,7 @@ def test_tmuxsession_new_window_includes_server_and_subcommand(fake_tmux_path: P
     assert "-L" in argv
     assert TMUX_SERVER_NAME in argv
     assert "new-window" in argv
+    assert "-d" in argv
     assert "-t" in argv
     assert "adda-dev-session-abc12345" in argv
 
@@ -652,7 +653,7 @@ def test_tmuxsessionmanager_open_secondary_windows_calls_sidecar_watch_logs(fake
     manager = TmuxSessionManager(TmuxServer(), FakeSessionRepository(), FakeOutput(), sidecar, container)
     manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
     manager._open_secondary_windows(_make_session(), _make_spec())  # type: ignore[arg-type]
-    assert sidecar.watch_logs_calls == [manager._windows[0]]
+    assert sidecar.watch_logs_calls == [manager._windows[1]]
 
 
 def test_tmuxsessionmanager_open_secondary_windows_calls_container_exec_shell(fake_tmux_path: Path) -> None:
@@ -663,7 +664,7 @@ def test_tmuxsessionmanager_open_secondary_windows_calls_container_exec_shell(fa
     manager = TmuxSessionManager(TmuxServer(), FakeSessionRepository(), FakeOutput(), sidecar, container)
     manager._tmux_session = TmuxSession("adda-dev-session-abc12345")
     manager._open_secondary_windows(_make_session(), _make_spec())  # type: ignore[arg-type]
-    assert container.exec_interactive_shell_calls == [manager._windows[1]]
+    assert container.exec_interactive_shell_calls == [manager._windows[0]]
 
 
 def test_tmuxsessionmanager_open_secondary_windows_creates_tmux_windows(fake_tmux_path: Path) -> None:

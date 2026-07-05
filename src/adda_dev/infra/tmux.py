@@ -37,7 +37,7 @@ class TmuxSession:
     def new_window(self, window_name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         """Open a new window in this session running cmd."""
         self._runner.run(
-            ["tmux", "-L", TMUX_SERVER_NAME, "new-window", "-t", self._session_name, "-n", window_name, *cmd]
+            ["tmux", "-L", TMUX_SERVER_NAME, "new-window", "-d", "-t", self._session_name, "-n", window_name, *cmd]
         ).raise_if_failed("tmux new-window failed")
 
     def kill_window(self, window_name: str) -> None:
@@ -157,12 +157,12 @@ class TmuxSessionManager(SessionManager):
         return TmuxWindow(name, self._tmux_session)
 
     def _open_secondary_windows(self, session: Session, spec: ContractSpec) -> None:
-        if self._tmux_config.proxy_logs_window:
-            logs_window = self.create_window("adda-dev proxy logs")
-            self._sidecar.watch_logs(logs_window)
         if self._tmux_config.shell_window:
             shell_window = self.create_window("adda-dev shell")
             self._container.exec_interactive_shell(shell_window)
+        if self._tmux_config.proxy_logs_window:
+            logs_window = self.create_window("adda-dev proxy logs")
+            self._sidecar.watch_logs(logs_window)
 
     def _teardown(self) -> None:
         if self._tmux_session is not None:
