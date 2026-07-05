@@ -16,6 +16,9 @@ from tests.conftest import FakeAddaPrimaryContainer, FakeOutput, FakeProxySideca
 
 
 class _FakeProcessHandle(ProcessHandle):
+    def __init__(self) -> None:
+        super().__init__([])
+
     def wait(self) -> int:
         return 0
 

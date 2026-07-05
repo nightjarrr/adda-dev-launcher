@@ -72,11 +72,7 @@ class EnvoySidecar(ProxySidecar):
         host_socket = socket_dir / _ENVOY_SOCKET_FILENAME
 
         with self._output.step("Proxy image") as s:
-            handle = self._engine.pull(self._runner, self._envoy_image)
-            if handle.wait() != 0:
-                raise ProxyError(
-                    f"Pulling {self._envoy_image} failed", stdout=handle.stdout().strip(), stderr=handle.stderr().strip()
-                )
+            self._engine.pull(self._runner, self._envoy_image).raise_if_failed(f"Pulling {self._envoy_image} failed")
             s.done(f"pulled {self._envoy_image}")
 
         name = f"{session.session_id}-proxy"
@@ -85,8 +81,7 @@ class EnvoySidecar(ProxySidecar):
 
         with self._output.step("Proxy") as s:
             handle = self._engine.run_d(self._runner, self._envoy_image, name, args, cmd=cmd, remove=False)
-            if handle.wait() != 0:
-                raise ProxyError("Envoy container failed to start", stderr=handle.stderr().strip())
+            handle.raise_if_failed("Envoy container failed to start")
             self._container_name = name
             self._poll_ready(host_socket)
             s.done("ready")

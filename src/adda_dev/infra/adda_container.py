@@ -3,7 +3,7 @@ AddaPrimaryContainerImpl adapter: pulls and runs the primary ADDA container, wit
 """
 
 from ..common import Output
-from ..domain.adda_container import AddaPrimaryContainer, ContainerError
+from ..domain.adda_container import AddaPrimaryContainer
 from ..domain.contract import ContractSpec, ContractTranslator
 from ..domain.session import Session
 from ..domain.window import Window
@@ -41,11 +41,7 @@ class AddaPrimaryContainerImpl(AddaPrimaryContainer):
             if spec.image.endswith(":local"):
                 s.done(f"local {spec.image}")
             else:
-                handle = self._engine.pull(self._pull_runner, spec.image)
-                if handle.wait() != 0:
-                    raise ContainerError(
-                        f"Pulling {spec.image} failed", stdout=handle.stdout().strip(), stderr=handle.stderr().strip()
-                    )
+                self._engine.pull(self._pull_runner, spec.image).raise_if_failed(f"Pulling {spec.image} failed")
                 s.done(f"pulled {spec.image}")
         self._engine.run_it(
             WindowedRunner(window),

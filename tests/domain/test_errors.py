@@ -16,6 +16,23 @@ def test_addadeverror_details_empty_by_default() -> None:
     assert exc.details == []
 
 
+def test_addadeverror_details_kwargs_populated() -> None:
+    exc = AddaDevError("msg", stdout="OUT")
+    assert ("stdout", "OUT") in exc.details
+
+
+def test_addadeverror_details_kwargs_empty_string_filtered() -> None:
+    exc = AddaDevError("msg", stdout="", stderr="ERR")
+    labels = [label for label, _ in exc.details]
+    assert "stdout" not in labels
+    assert "stderr" in labels
+
+
+def test_addadeverror_details_kwargs_none_filtered() -> None:
+    exc = AddaDevError("msg", key=None)
+    assert exc.details == []
+
+
 def test_addadeverror_str_message_only_when_no_details() -> None:
     exc = AddaDevError("base message")
     assert str(exc) == "base message"

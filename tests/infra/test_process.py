@@ -4,7 +4,7 @@ Tests for adda_dev.infra.process: DefaultRunner and CapturedOutputRunner.
 
 import pytest
 
-from adda_dev.infra.process import CapturedOutputRunner, DefaultRunner, ProcessError, ProcessHandle
+from adda_dev.infra.process import CapturedOutputRunner, DefaultRunner, ProcessError, ProcessHandle, ProcessRunError
 
 # ---------------------------------------------------------------------------
 # DefaultRunner / _DefaultHandle
@@ -151,3 +151,91 @@ def test_capturedoutputrunner_start_raises_processerror_on_bad_command() -> None
     runner = CapturedOutputRunner()
     with pytest.raises(ProcessError):
         runner.run(["/nonexistent"])
+
+
+# ---------------------------------------------------------------------------
+# raise_if_failed — CapturedOutputRunner
+# ---------------------------------------------------------------------------
+
+
+def test_capturedoutputrunner_raise_if_failed_nonzero_raises_processrunerror() -> None:
+    runner = CapturedOutputRunner()
+    handle = runner.run(["false"])
+    with pytest.raises(ProcessRunError):
+        handle.raise_if_failed("command failed")
+
+
+def test_capturedoutputrunner_raise_if_failed_nonzero_details_include_command() -> None:
+    runner = CapturedOutputRunner()
+    handle = runner.run(["false"])
+    with pytest.raises(ProcessRunError) as exc_info:
+        handle.raise_if_failed("command failed")
+    detail_keys = [k for k, _ in exc_info.value.details]
+    assert "command" in detail_keys
+
+
+def test_capturedoutputrunner_raise_if_failed_nonzero_details_include_code() -> None:
+    runner = CapturedOutputRunner()
+    handle = runner.run(["false"])
+    with pytest.raises(ProcessRunError) as exc_info:
+        handle.raise_if_failed("command failed")
+    detail_keys = [k for k, _ in exc_info.value.details]
+    assert "code" in detail_keys
+
+
+def test_capturedoutputrunner_raise_if_failed_nonzero_details_command_value() -> None:
+    runner = CapturedOutputRunner()
+    handle = runner.run(["sh", "-c", "exit 1"])
+    with pytest.raises(ProcessRunError) as exc_info:
+        handle.raise_if_failed("command failed")
+    detail_map = dict(exc_info.value.details)
+    assert detail_map["command"] == "sh -c exit 1"
+
+
+def test_capturedoutputrunner_raise_if_failed_nonzero_details_stdout_and_stderr_present() -> None:
+    runner = CapturedOutputRunner()
+    handle = runner.run(["sh", "-c", "echo OUT; echo ERR >&2; exit 1"])
+    with pytest.raises(ProcessRunError) as exc_info:
+        handle.raise_if_failed("command failed")
+    detail_keys = [k for k, _ in exc_info.value.details]
+    assert "stdout" in detail_keys
+    assert "stderr" in detail_keys
+
+
+def test_capturedoutputrunner_raise_if_failed_zero_returns_none() -> None:
+    runner = CapturedOutputRunner()
+    handle = runner.run(["true"])
+    result = handle.raise_if_failed("command failed")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# raise_if_failed — DefaultRunner
+# ---------------------------------------------------------------------------
+
+
+def test_defaultrunner_raise_if_failed_nonzero_raises_processrunerror() -> None:
+    runner = DefaultRunner()
+    handle = runner.run(["false"])
+    with pytest.raises(ProcessRunError):
+        handle.raise_if_failed("command failed")
+
+
+def test_defaultrunner_raise_if_failed_nonzero_details_include_command_and_code() -> None:
+    runner = DefaultRunner()
+    handle = runner.run(["false"])
+    with pytest.raises(ProcessRunError) as exc_info:
+        handle.raise_if_failed("command failed")
+    detail_keys = [k for k, _ in exc_info.value.details]
+    assert "command" in detail_keys
+    assert "code" in detail_keys
+
+
+def test_defaultrunner_raise_if_failed_nonzero_details_no_stdout_or_stderr() -> None:
+    runner = DefaultRunner()
+    handle = runner.run(["false"])
+    with pytest.raises(ProcessRunError) as exc_info:
+        handle.raise_if_failed("command failed")
+    detail_keys = [k for k, _ in exc_info.value.details]
+    assert "stdout" not in detail_keys
+    assert "stderr" not in detail_keys

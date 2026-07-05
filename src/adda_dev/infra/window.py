@@ -10,6 +10,7 @@ class _WindowHandle(ProcessHandle):
     """ProcessHandle that delegates wait/terminate to a Window."""
 
     def __init__(self, window: Window) -> None:
+        super().__init__([])
         self._window = window
 
     def wait(self) -> int:

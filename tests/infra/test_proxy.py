@@ -12,6 +12,7 @@ import pytest
 
 from adda_dev.domain.proxy import ProxyError
 from adda_dev.domain.session import Session
+from adda_dev.infra.process import ProcessHandle, ProcessRunError
 from adda_dev.infra.proxy import (
     ENVOY_SOCKET_CONTAINER_PATH,
     EnvoySidecar,
@@ -41,8 +42,9 @@ _FAKE_ENVOY_IMAGE = "envoyproxy/envoy:test"
 # ---------------------------------------------------------------------------
 
 
-class _FakeHandle:
+class _FakeHandle(ProcessHandle):
     def __init__(self, rc: int = 0, out: str = "", err: str = "") -> None:
+        super().__init__([])
         self._rc = rc
         self._out = out
         self._err = err
@@ -134,10 +136,11 @@ def test_proxyerror_str_includes_stderr_section() -> None:
     assert "ERR" in str(exc)
 
 
-def test_proxyerror_attributes_readable() -> None:
+def test_proxyerror_details_contains_stdout_and_stderr() -> None:
     exc = ProxyError("msg", stdout="OUT", stderr="ERR")
-    assert exc.stdout == "OUT"
-    assert exc.stderr == "ERR"
+    detail_map = dict(exc.details)
+    assert detail_map["stdout"] == "OUT"
+    assert detail_map["stderr"] == "ERR"
 
 
 def test_proxyerror_str_message_only_when_no_streams() -> None:
@@ -398,7 +401,7 @@ def test_envoy_sidecar_start_failfast_captures_logs(tmp_path: Path) -> None:
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=10)
     with pytest.raises(ProxyError) as exc_info:
         sidecar.start(_make_session(tmp_path))
-    assert exc_info.value.stdout == "envoy crashed"
+    assert dict(exc_info.value.details).get("stdout") == "envoy crashed"
 
 
 def test_envoy_sidecar_start_failfast_on_inspect_failure(tmp_path: Path) -> None:
@@ -425,7 +428,7 @@ def test_envoy_sidecar_start_timeout_captures_logs(tmp_path: Path) -> None:
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
     with pytest.raises(ProxyError) as exc_info:
         sidecar.start(_make_session(tmp_path))
-    assert exc_info.value.stdout == "still starting"
+    assert dict(exc_info.value.details).get("stdout") == "still starting"
 
 
 # ---------------------------------------------------------------------------
@@ -434,7 +437,7 @@ def test_envoy_sidecar_start_timeout_captures_logs(tmp_path: Path) -> None:
 
 
 def test_envoy_sidecar_start_run_d_nonzero_exit_raises(tmp_path: Path) -> None:
-    """run_d returning non-zero must raise ProxyError before recording the name."""
+    """run_d returning non-zero must raise ProcessRunError before recording the name."""
 
     class _FailRunDEngine(FakeContainerEngine):
         def run_d(  # type: ignore[override]
@@ -452,7 +455,7 @@ def test_envoy_sidecar_start_run_d_nonzero_exit_raises(tmp_path: Path) -> None:
 
     eng = _FailRunDEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
-    with pytest.raises(ProxyError):
+    with pytest.raises(ProcessRunError):
         sidecar.start(_make_session(tmp_path))
     # stop() must be a no-op since _container_name was never set
     sidecar.stop()
@@ -567,7 +570,10 @@ def test_envoy_sidecar_capture_logs_swallows_exception(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-class _FailingPullHandle:
+class _FailingPullHandle(ProcessHandle):
+    def __init__(self) -> None:
+        super().__init__(["docker", "pull", "test-image"])
+
     def wait(self) -> int:
         return 1
 
@@ -589,10 +595,10 @@ class _FailingPullEngine(FakeContainerEngine):
         return _FailingPullHandle()
 
 
-def test_envoy_sidecar_start_raises_proxy_error_on_pull_failure(tmp_path: Path) -> None:
+def test_envoy_sidecar_start_raises_process_run_error_on_pull_failure(tmp_path: Path) -> None:
     eng = _FailingPullEngine()
     sidecar = EnvoySidecar(eng, _FAKE_ENVOY_IMAGE, FakeOutput(), sleep=lambda _: None, attempts=3)
-    with pytest.raises(ProxyError) as exc_info:
+    with pytest.raises(ProcessRunError) as exc_info:
         sidecar.start(_make_session(tmp_path))
     assert _FAKE_ENVOY_IMAGE in str(exc_info.value.args[0])
 

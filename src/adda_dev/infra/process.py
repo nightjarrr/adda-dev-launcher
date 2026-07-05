@@ -12,8 +12,15 @@ class ProcessError(AddaDevError):
     """Raised when an OS-level subprocess operation fails."""
 
 
+class ProcessRunError(AddaDevError):
+    """Raised when a subprocess exits with a non-zero status."""
+
+
 class ProcessHandle(abc.ABC):
     """Handle to a running or completed subprocess."""
+
+    def __init__(self, cmd: list[str]) -> None:
+        self._cmd = cmd
 
     @abc.abstractmethod
     def wait(self) -> int:
@@ -31,6 +38,21 @@ class ProcessHandle(abc.ABC):
     def stderr(self) -> str:
         """Return captured stderr."""
 
+    def raise_if_failed(self, message: str) -> None:
+        """Wait for the process; raise ProcessRunError if exit code is non-zero."""
+        code = self.wait()
+        if code == 0:
+            return
+        try:
+            out: str | None = self.stdout().strip() or None
+        except RuntimeError:
+            out = None
+        try:
+            err: str | None = self.stderr().strip() or None
+        except RuntimeError:
+            err = None
+        raise ProcessRunError(message, command=" ".join(self._cmd), code=str(code), stdout=out, stderr=err)
+
 
 class ProcessRunner(abc.ABC):
     """Port for launching subprocesses."""
@@ -43,7 +65,8 @@ class ProcessRunner(abc.ABC):
 class _DefaultHandle(ProcessHandle):
     """ProcessHandle for DefaultRunner — stdout and stderr are not captured."""
 
-    def __init__(self, process: subprocess.Popen[bytes]) -> None:
+    def __init__(self, process: subprocess.Popen[bytes], cmd: list[str]) -> None:
+        super().__init__(cmd)
         self._process = process
         self._returncode: int | None = None
 
@@ -76,13 +99,14 @@ class DefaultRunner(ProcessRunner):
             process: subprocess.Popen[bytes] = subprocess.Popen(cmd, env=env)
         except OSError as exc:
             raise ProcessError(str(exc)) from exc
-        return _DefaultHandle(process)
+        return _DefaultHandle(process, cmd)
 
 
 class _CapturedHandle(ProcessHandle):
     """ProcessHandle for CapturedOutputRunner — stdout and stderr are captured after wait()."""
 
-    def __init__(self, process: subprocess.Popen[str]) -> None:
+    def __init__(self, process: subprocess.Popen[str], cmd: list[str]) -> None:
+        super().__init__(cmd)
         self._process = process
         self._returncode: int | None = None
         self._stdout: str | None = None
@@ -134,4 +158,4 @@ class CapturedOutputRunner(ProcessRunner):
             )
         except OSError as exc:
             raise ProcessError(str(exc)) from exc
-        return _CapturedHandle(process)
+        return _CapturedHandle(process, cmd)

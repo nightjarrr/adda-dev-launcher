@@ -34,11 +34,9 @@ class TmuxSession:
 
     def new_window(self, window_name: str, cmd: list[str], env: dict[str, str] | None = None) -> None:
         """Open a new window in this session running cmd."""
-        handle = self._runner.run(
+        self._runner.run(
             ["tmux", "-L", TMUX_SERVER_NAME, "new-window", "-t", self._session_name, "-n", window_name, *cmd]
-        )
-        if handle.wait() != 0:
-            raise TmuxError(f"tmux new-window failed: {handle.stderr().strip()}")
+        ).raise_if_failed("tmux new-window failed")
 
     def kill_window(self, window_name: str) -> None:
         """Kill a window by name, best-effort."""
@@ -102,7 +100,7 @@ class TmuxServer:
     def new_session(self, session: Session, window_name: str, cmd: list[str], env: dict[str, str] | None = None) -> TmuxSession:
         """Create a new detached tmux session and return a TmuxSession handle."""
         session_name = session.session_id
-        handle = self._runner.run(
+        self._runner.run(
             [
                 "tmux",
                 "-L",
@@ -117,9 +115,7 @@ class TmuxServer:
                 window_name,
                 *cmd,
             ]
-        )
-        if handle.wait() != 0:
-            raise TmuxError(f"tmux new-session failed: {handle.stderr().strip()}")
+        ).raise_if_failed("tmux new-session failed")
         return TmuxSession(session_name)
 
     def kill_server(self) -> None:
