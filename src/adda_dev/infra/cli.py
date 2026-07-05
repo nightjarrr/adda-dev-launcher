@@ -10,8 +10,9 @@ import typer
 from ..app.run import RunOptions, run_session
 from ..common import AddaDevError
 from ..domain.llm import LlmProvider
+from ..domain.session_manager import SessionManager
 from .adda_container import AddaPrimaryContainerImpl
-from .config import load_app_config
+from .config import SessionModeChoice, load_app_config
 from .container import create_engine
 from .contract import DockerContractTranslator
 from .keyring_source import KeyringSecretSource
@@ -20,6 +21,13 @@ from .output import RichOutput
 from .project import TomlProjectRepository
 from .proxy import EnvoySidecar
 from .session import DirectSessionManager, FsSessionRepository
+from .tmux import TmuxServer, TmuxSessionManager
+
+
+def _resolve_session_mode(config_mode: SessionModeChoice, use_tmux: bool | None) -> SessionModeChoice:
+    if use_tmux is None:
+        return config_mode
+    return SessionModeChoice.tmux if use_tmux else SessionModeChoice.direct
 
 
 def _resolve_provider(provider: LlmProvider | None, anthropic: bool, deepseek: bool) -> LlmProvider | None:
@@ -55,6 +63,7 @@ def run(
     provider: LlmProvider | None = typer.Option(None, "--provider", help="LLM provider (overrides project file)"),
     anthropic: bool = typer.Option(False, "--anthropic", help="Shorthand for --provider anthropic"),
     deepseek: bool = typer.Option(False, "--deepseek", help="Shorthand for --provider deepseek"),
+    use_tmux: bool | None = typer.Option(None, "--tmux/--no-tmux", help="Override session mode (default from config)"),
 ) -> None:
     """Start the ADDA Dev Runtime for a project. Pass `-- CMD...` to override the container command."""
     signal.signal(signal.SIGTERM, _terminate_on_sigterm)
@@ -71,7 +80,13 @@ def run(
         provider_repo = LlmConfigProviderRepository(config.llm, source)
         sidecar = EnvoySidecar(engine, config.envoy_image, output)
         container = AddaPrimaryContainerImpl(engine, DockerContractTranslator(), output, cmd_override=cmd_override)
-        session_manager = DirectSessionManager(FsSessionRepository(), output, sidecar, container)
+        mode = _resolve_session_mode(config.session.mode, use_tmux)
+        session_manager: SessionManager
+        if mode == SessionModeChoice.tmux:
+            server = TmuxServer()
+            session_manager = TmuxSessionManager(server, FsSessionRepository(), output, sidecar, container, config.session.tmux)
+        else:
+            session_manager = DirectSessionManager(FsSessionRepository(), output, sidecar, container)
         options = RunOptions(issue_id=issue_id, provider=resolved)
         run_session(project_name, project_repo, provider_repo, session_manager, output, options)
     except AddaDevError as exc:

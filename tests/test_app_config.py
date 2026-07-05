@@ -7,7 +7,16 @@ from pathlib import Path
 import pytest
 
 from adda_dev.domain.tmpfs import TmpfsSizes
-from adda_dev.infra.config import DEFAULT_ENVOY_IMAGE, AppConfig, ContainerEngineChoice, ProjectDefaults, load_app_config
+from adda_dev.infra.config import (
+    DEFAULT_ENVOY_IMAGE,
+    AppConfig,
+    ContainerEngineChoice,
+    ProjectDefaults,
+    SessionConfig,
+    SessionModeChoice,
+    TmuxSessionConfig,
+    load_app_config,
+)
 from adda_dev.infra.store import SchemaValidationError, TomlParseError
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -54,6 +63,9 @@ def test_app_config_defaults() -> None:
     assert cfg.llm.anthropic.secret_name == "oauth"
     assert cfg.llm.deepseek.secret_name == "apikey"
     assert cfg.project_defaults.tmpfs.home == "512m"
+    assert cfg.session.mode == SessionModeChoice.tmux
+    assert cfg.session.tmux.shell_window is True
+    assert cfg.session.tmux.proxy_logs_window is True
 
 
 def test_app_config_bad_enum_rejected() -> None:
@@ -178,3 +190,64 @@ def test_load_app_config_partial_tmpfs_defaults(tmp_path: Path, monkeypatch: pyt
     # other fields retain built-in defaults
     assert cfg.project_defaults.tmpfs.workspace == "256m"
     assert cfg.project_defaults.tmpfs.tmp == "256m"
+
+
+# ---------------------------------------------------------------------------
+# SessionModeChoice, TmuxSessionConfig, SessionConfig — defaults and parsing
+# ---------------------------------------------------------------------------
+
+
+def test_session_mode_choice_members() -> None:
+    assert SessionModeChoice.tmux == "tmux"
+    assert SessionModeChoice.direct == "direct"
+
+
+def test_tmux_session_config_defaults() -> None:
+    cfg = TmuxSessionConfig()
+    assert cfg.shell_window is True
+    assert cfg.proxy_logs_window is True
+
+
+def test_session_config_defaults() -> None:
+    cfg = SessionConfig()
+    assert cfg.mode == SessionModeChoice.tmux
+    assert cfg.tmux.shell_window is True
+    assert cfg.tmux.proxy_logs_window is True
+
+
+def test_load_app_config_session_mode_direct(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "config.toml").write_text('[session]\nmode = "direct"\n')
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = load_app_config()
+    assert cfg.session.mode == SessionModeChoice.direct
+
+
+def test_load_app_config_session_tmux_flags_false(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "config.toml").write_text("[session.tmux]\nshell_window = false\nproxy_logs_window = false\n")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = load_app_config()
+    assert cfg.session.tmux.shell_window is False
+    assert cfg.session.tmux.proxy_logs_window is False
+
+
+def test_load_app_config_session_tmux_flags_default_true(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "config.toml").write_text('[session]\nmode = "direct"\n')
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = load_app_config()
+    assert cfg.session.tmux.shell_window is True
+    assert cfg.session.tmux.proxy_logs_window is True
+
+
+def test_app_config_unknown_key_under_session_tmux_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_root = tmp_path / "adda-dev"
+    config_root.mkdir()
+    (config_root / "config.toml").write_text("[session.tmux]\nunknown_flag = true\n")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    with pytest.raises(SchemaValidationError):
+        load_app_config()
