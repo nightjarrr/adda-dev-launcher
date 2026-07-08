@@ -4,8 +4,6 @@ This is the host-side launcher for the ADDA Dev Runtime. It runs on the host mac
 
 ## Project overview
 
-The launcher is being redesigned in Python. The Bash script in `launcher/` remains the active launcher until the Python redesign is complete.
-
 The Python package (`adda-dev`) is the active launcher. Its source lives in `src/adda_dev/`.
 
 The `launcher/` directory contains the legacy Bash launcher (`adda-dev.sh`) and its companion templates. It is preserved for reference and is pending removal.
