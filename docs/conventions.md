@@ -106,11 +106,23 @@ The CLI is built with Typer. Follow these rules when adding or modifying command
 
 ## Output
 
-`Output` is a `typing.Protocol` port defined in `common.py`. It exposes three methods: `info(message: str)`, `warning(message: str)`, and `error(exc: Exception)`. The production adapter is `RichOutput` in `infra/output.py`, which emits Rich-formatted terminal output.
+`Output` is a `typing.Protocol` port defined in `common.py`. It exposes seven methods:
 
-- **Receive `Output` as a parameter and call its methods** — `output.info(...)`, `output.warning(...)`, `output.error(...)`. Do not import or instantiate `RichOutput` from `app/` or `domain/`.
+| Method | Signature | Purpose |
+|---|---|---|
+| `info` | `(message: str)` | Plain informational line |
+| `warning` | `(message: str)` | Yellow-labelled warning line |
+| `error` | `(exc: Exception)` | Render an exception as a boxed error panel |
+| `ruler` | `(title: str = "", *, pad: bool = True)` | Section divider with optional title |
+| `blank` | `()` | Empty line |
+| `kv` | `(key: str, value: str \| tuple[str, ...])` | Aligned key–value row; tuple values are joined with ` · ` |
+| `step` | `(label: str) -> StepContext` | Spinner context manager for a named async step |
+
+`StepContext` (also in `common.py`) is a context manager with a `done(detail: str)` method. Call `done()` on success; leave it uncalled and let `__exit__` handle the failure row. The production adapter is `RichOutput` in `infra/output.py`; it uses a Live spinner for `step()` and formats all output with Rich.
+
+- **Receive `Output` as a parameter and call its methods.** Do not import or instantiate `RichOutput` from `app/` or `domain/`.
 - **Rich is an `infra/`-only library.** `RichOutput` wraps it; any other Rich-specific features (progress bars, tables, live displays) also belong in `infra/` adapters. `app/` and `domain/` must not import `rich` directly.
-- **In tests, use `FakeOutput` from `tests/conftest.py`** — it captures calls in `info_calls`, `warning_calls`, and `error_calls` lists for assertion.
+- **In tests, use `FakeOutput` from `tests/conftest.py`** — it captures calls in `info_calls`, `warning_calls`, `error_calls`, `ruler_calls`, `kv_calls`, and `step_calls` lists, and counts blank lines in `blank_count`.
 - **Do not use `print()`** in application code.
 
 Raise `typer.Exit(code=1)` for fatal errors rather than calling `sys.exit()` directly.

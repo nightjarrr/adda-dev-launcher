@@ -54,14 +54,14 @@ Two rules govern the design. First, aggregates reference other aggregates by **i
 
 ### Session lifecycle
 
-The session launch sequence — create a session record, start the proxy sidecar, finalize the contract spec, open the primary window, run the primary container, open secondary windows, wait for the primary to exit, tear everything down in order — is mode-independent. Execution mode (Direct terminal today; tmux in the next phase) determines only *how* windows are created and what mode-specific teardown involves, not the sequence itself. `SessionManager` encodes this invariant algorithm as a domain base class; subclasses supply `create_window()` and two optional hooks (`_open_secondary_windows`, `_teardown`).
+The session launch sequence — create a session record, start the proxy sidecar, finalize the contract spec, open the primary window, run the primary container, open secondary windows, wait for the primary to exit, tear everything down in order — is mode-independent. Execution mode (Direct or tmux) determines only *how* windows are created and what mode-specific teardown involves, not the sequence itself. `SessionManager` encodes this invariant algorithm as a domain base class; subclasses supply `create_window()` and two optional hooks (`_open_secondary_windows`, `_teardown`).
 
 **The two lifecycle owners.** `SessionManager` coordinates two objects that each own a running process for the duration of the session:
 
-- **`AddaPrimaryContainer`** — foreground. `start(session, spec, window)` takes a `Window`; the primary container's interactive TTY is bound to that window for the session's duration.
-- **`ProxySidecar`** — background. `start(session)` manages the Envoy container internally (detached) and returns the host-side proxy socket path. `SessionManager._launch()` passes this return value to `draft.finalize(host_socket)` to produce the final `ContractSpec` — the reason the sidecar must start before the spec can be finalized.
+- **`AddaPrimaryContainer`** — foreground. `start(session, spec, window)` takes a `Window`; the primary container's interactive TTY is bound to that window for the session's duration. `exec_interactive_shell(window)` opens a second interactive shell into the running container — used by `TmuxSessionManager` for the shell secondary window.
+- **`ProxySidecar`** — background. `start(session)` manages the Envoy container internally (detached) and returns the host-side proxy socket path. `SessionManager._launch()` passes this return value to `draft.finalize(host_socket)` to produce the final `ContractSpec` — the reason the sidecar must start before the spec can be finalized. `watch_logs(window)` streams sidecar logs into a window — used by `TmuxSessionManager` for the proxy logs secondary window.
 
-Both lifecycle owners are also extensibility surfaces for secondary windows in the tmux layout (planned in the next phase): `AddaPrimaryContainer` will expose a Window-accepting method for an interactive shell into the running container; `ProxySidecar` will expose one for a log watcher. Both are foreground. The `_open_secondary_windows()` hook on `SessionManager` is where subclasses call these methods.
+Both lifecycle owners expose Window-accepting secondary methods (`exec_interactive_shell`, `watch_logs`). The `_open_secondary_windows()` hook on `SessionManager` is where subclasses call these methods. `TmuxSessionManager` opens a shell window and a proxy-logs window if enabled in `TmuxSessionConfig`; `DirectSessionManager` leaves the hook as a no-op.
 
 **`attach` is session control, not container lifecycle.** The lifecycle owners own `start`/`stop`. Attaching — blocking until the session ends — is mode-specific: Direct mode waits on the primary process; tmux mode attaches to the tmux session. It belongs on the `SessionManager`/`Window` side.
 
@@ -142,13 +142,13 @@ Two distinct kinds of ports appear in this codebase:
 - **Output delivery:** `Output` Protocol (`common.py`) → `RichOutput` (`infra/output.py`)
 - **Proxy sidecar:** `ProxySidecar` (`domain/proxy.py`) → `EnvoySidecar` (`infra/proxy.py`)
 - **Primary container lifecycle:** `AddaPrimaryContainer` (`domain/adda_container.py`) → `AddaPrimaryContainerImpl` (`infra/adda_container.py`)
-- **Session window:** `Window` (`domain/window.py`) → `DirectWindow` (`infra/session.py`)
-- **Session lifecycle:** `SessionManager` (`domain/session_manager.py`) → `DirectSessionManager` (`infra/session.py`)
+- **Session window:** `Window` (`domain/window.py`) → `DirectWindow` (`infra/session.py`); `TmuxPrimaryWindow`, `TmuxWindow` (`infra/tmux.py`)
+- **Session lifecycle:** `SessionManager` (`domain/session_manager.py`) → `DirectSessionManager` (`infra/session.py`); `TmuxSessionManager` (`infra/tmux.py`)
 
 **Infra-internal ports** — technical mechanism abstracted within `infra/` to enable adapter swaps (e.g., Docker↔Podman) without touching inner rings. Inner rings never name these ports.
 
 - **Container engine:** `ContainerEngine` (`infra/container.py`) → `DockerEngine` (`infra/container.py`); `create_engine()` factory builds the engine and emits the startup banner + rootless warning
-- **Subprocess execution:** `ProcessRunner`/`ProcessHandle` (`infra/process.py`) → `DefaultRunner`, `CapturedOutputRunner` (`infra/process.py`)
+- **Subprocess execution:** `ProcessRunner`/`ProcessHandle` (`infra/process.py`) → `DefaultRunner`, `CapturedOutputRunner` (`infra/process.py`); `WindowedRunner` (`infra/window.py`) adapts a `Window` to the `ProcessRunner` port so the engine can run interactively into any window type
 
 ### Package structure
 
@@ -164,7 +164,7 @@ Two distinct kinds of ports appear in this codebase:
 
 ## 6. Configuration and project model
 
-**Two entities.** `AppConfig` is the host-wide configuration; a `Project` is a domain model. The project's TOML file is parsed into a serialized file shape and then *resolved* into the fully-typed `Project` the rest of the launcher uses. Fields belong to the code, not to this document.
+**Two entities.** `AppConfig` is the host-wide configuration (fields: `container_engine`, `envoy_image`, `llm`, `project_defaults`, `session`); a `Project` is a domain model. `AppConfig.session` is a `SessionConfig` that selects the execution mode (`tmux` or `direct`, default `tmux`) and carries `TmuxSessionConfig` with per-mode options (`shell_window`, `proxy_logs_window`, both defaulting to `True`). The project's TOML file is parsed into a serialized file shape and then *resolved* into the fully-typed `Project` the rest of the launcher uses. Fields belong to the code, not to this document.
 
 **The config store and its boundary.** All host state lives under `~/.config/adda-dev/` (XDG; `$XDG_CONFIG_HOME` relocates it — there is no config-directory flag). The `store` module is the persistence boundary: it exposes only the entry point into that folder, safe file-name validation, and TOML loading — it knows no filenames. Each entity owns its own location *within* the store: `AppConfig` is the root `config.toml`; a `Project` is an entry in the `projects/` registry. Persistence mechanics stay in one place; layout knowledge stays with the entities that own it.
 
