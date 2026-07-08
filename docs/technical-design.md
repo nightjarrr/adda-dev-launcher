@@ -35,9 +35,8 @@ Required:
 * `uv` — required to install and update the `adda-dev` CLI. Manages the Python interpreter; Python is not separately required.
 * Docker Engine or compatible OCI runtime. Desktop is not required.
 * `tmux` — used for survivable terminal sessions.
-* `libsecret-tools` — provides `secret-tool` for keyring access.
+* An active GNOME, KDE, or compatible Secret Service login session, so the keyring is unlocked. The launcher retrieves credentials via the Python `keyring` library over D-Bus — no `secret-tool` binary is needed at runtime.
 * `seahorse` — optional but recommended for GUI keyring inspection.
-* An active GNOME, KDE, or compatible Secret Service login session, so the keyring is unlocked.
 * A terminal emulator (Ghostty recommended).
 
 Notably **not** required on the host: `git`, `gh`, the AI harness CLI, Python, Node, or any project-specific runtime tooling. Those live inside containers.
@@ -218,14 +217,14 @@ Each entry uses a namespaced service name (`adda-dev:<system>`) and a `username`
 
 ### Retrieval
 
-The launcher retrieves the required credentials at runtime:
+The launcher retrieves credentials at runtime using the Python `keyring` library, which accesses the host Secret Service directly over D-Bus. No `secret-tool` binary is invoked. If a credential is not found, the launcher fails fast with an error identifying the missing entry.
+
+To verify stored entries manually:
 
 ```bash
 secret-tool lookup service adda-dev:anthropic username oauth
 secret-tool lookup service adda-dev:github username <secret_name>
 ```
-
-If either lookup returns empty, the launcher fails fast with a bootstrap-procedure pointer.
 
 ### Rotation
 

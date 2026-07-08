@@ -17,10 +17,9 @@ Linux only, tested on Ubuntu 24.04.
 | `uv` | Installs and updates the `adda-dev` CLI. Manages its own Python interpreter — Python is not separately required. |
 | Docker Engine | Runs the AI harness container and Envoy sidecar. Docker Desktop is not required. |
 | `tmux` | Provides survivable terminal sessions. |
-| `libsecret-tools` (`secret-tool`) | Retrieves credentials from the host keyring at launch time. |
+| Active GNOME / KDE / compatible Secret Service session | Required for the keyring to be unlocked. The launcher reads credentials via the `keyring` library over D-Bus — no `secret-tool` binary is needed at runtime. |
 | `seahorse` | Optional but recommended for GUI keyring inspection. |
 | Ghostty (or another terminal emulator) | Hosts the tmux session. |
-| Active GNOME / KDE / compatible Secret Service session | Required for the keyring to be unlocked at launch time. |
 
 ---
 
@@ -65,9 +64,23 @@ repo = "<repo>"
 secret_name = "<repo>-token"   # used as the keyring username
 ```
 
-`~/.config/adda-dev/config.toml` is optional — all defaults work for most users. The most likely override is `container_engine = "podman"`.
+`~/.config/adda-dev/config.toml` is optional. A file with all fields set to their defaults looks like:
+
+```toml
+container_engine = "docker"   # or "podman"
+envoy_image = "envoyproxy/envoy:v1.33.14"
+
+[session]
+mode = "tmux"   # or "direct"
+```
 
 ### 2. Store the Claude Code OAuth token
+
+The credential storage steps below use `secret-tool`. Install it if not already present:
+
+```bash
+sudo apt install libsecret-tools
+```
 
 Acquire the token using a throwaway container:
 
