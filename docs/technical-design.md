@@ -32,65 +32,54 @@ Linux only, tested on Ubuntu 24.04.
 
 Required:
 
+* `uv` — required to install and update the `adda-dev` CLI. Manages the Python interpreter; Python is not separately required.
 * Docker Engine or compatible OCI runtime. Desktop is not required.
-* Bash.
-* `openssl` command-line utility — used by the launcher for random run/session identifiers.
-* Ghostty, or another modern terminal emulator.
 * `tmux` — used for survivable terminal sessions.
-* `libsecret-tools` — provides `secret-tool` for keyring access.
+* An active GNOME, KDE, or compatible Secret Service login session, so the keyring is unlocked. The launcher retrieves credentials via the Python `keyring` library over D-Bus — no `secret-tool` binary is needed at runtime.
 * `seahorse` — optional but recommended for GUI keyring inspection.
-* An active GNOME, KDE, or compatible Secret Service login session, so the keyring is unlocked.
+* A terminal emulator (Ghostty recommended).
 
-Notably **not** required on the host: `git`, `gh`, the AI harness CLI, Python, Node, uv, or any project-specific runtime tooling. Those live inside containers.
+Notably **not** required on the host: `git`, `gh`, the AI harness CLI, Python, Node, or any project-specific runtime tooling. Those live inside containers.
 
 ---
 
 ## Launcher
 
-Host-side script (`adda-dev.sh`). Creates one ephemeral AI harness dev runtime per invocation.
+The `adda-dev` Python CLI (`adda-dev run <project>`). Creates one ephemeral AI harness dev runtime per invocation.
 
 Invocation:
 
 ```bash
-adda-dev.sh
-adda-dev.sh <issue-id>
-adda-dev.sh -- <cmd> [args...]
-adda-dev.sh <issue-id> -- <cmd> [args...]
+adda-dev run <project>
+adda-dev run <project> --issue N
+adda-dev run <project> --deepseek
+adda-dev run <project> -- <cmd> [args...]
 ```
 
-### Per-project configuration
+### Configuration
 
-The launcher reads `adda-dev.env` from the same directory as the launcher script.
+Two TOML file locations are used:
 
-Required variables:
+- **Host config** (optional): `~/.config/adda-dev/config.toml` — global overrides such as `container_engine`. All defaults work for most users without this file.
+- **Project files**: `~/.config/adda-dev/projects/<name>.toml` — one file per project.
 
-```bash
-# Github repo
-GITHUB_OWNER=
-GITHUB_REPO=
+Project file schema:
 
-# ADDA Dev Runtime container image configuration
-ADDA_DEV_IMAGE=
-ADDA_DEV_USER=adda
-ADDA_DEV_UID=1000
-ADDA_DEV_GID=1000
-ADDA_DEV_HOME_TMPFS_SIZE=512m
-ADDA_DEV_WORKSPACE_TMPFS_SIZE=256m
-ADDA_DEV_TMP_TMPFS_SIZE=256m
-# Needs to be a file directly in /run to support the /run tmpfs
-ADDA_DEV_PROXY_SOCKET_CONTAINER_PATH=/run/proxy.sock
-ADDA_DEV_PROXY_PORT=8080
+```toml
+image = "ghcr.io/<owner>/<repo>:<tag>"
+provider = "anthropic"   # or "deepseek"
 
-# Envoy perimeter sidecar configuration
-ENVOY_IMAGE=envoyproxy/envoy:v1.33.14
-ENVOY_SOCKET_CONTAINER_PATH=/run/adda-dev-proxy/proxy.sock
+[github]
+owner = "<owner>"
+repo = "<repo>"
+secret_name = "<repo>-token"   # used as the keyring username
 ```
 
 ### Behavior
 
 1. Validate arguments.
-2. Verify host prerequisites: `docker`, `secret-tool`, `tmux`, `openssl`.
-3. Source `adda-dev.env` and validate required variables.
+2. Verify host prerequisites: `docker`, `secret-tool`, `tmux`.
+3. Load the project TOML file for `<project>` from `~/.config/adda-dev/projects/<project>.toml` and validate it.
 4. Seed `~/.tmux.conf` from `scripts/adda-dev.tmux.conf` only if missing; source it best-effort.
 5. If not already inside tmux, generate a session name, export it, and re-enter the launcher inside a named tmux session.
 6. Retrieve auth tokens from the Secret Service keyring. See *Authentication*.
@@ -112,6 +101,10 @@ The launcher seeds `~/.tmux.conf` from `scripts/adda-dev.tmux.conf` only when `~
 ### Concurrency
 
 Multiple features may run concurrently. Each invocation gets its own AI harness container, Envoy sidecar, runtime directory, Unix socket, and tmux session. Sessions share no state with each other except through GitHub.
+
+### Legacy Bash launcher
+
+`launcher/adda-dev.sh` was the original host-side launcher. It is preserved in the repository for reference and is pending removal.
 
 ---
 
@@ -214,24 +207,24 @@ Both are stored in the host Secret Service keyring, retrieved by the launcher, a
 
 ### Secret naming in keyring
 
-| Secret | Service | Account | Key |
-|---|---|---|---|
-| Claude Code OAuth token | `adda-dev` | `claude` | `oauth` (default) |
-| GitHub Token | `adda-dev` | `github` | repo-specific (e.g. `acme-token`) |
-| DeepSeek API key | `adda-dev` | `deepseek` | `apikey` (default) |
+| Secret | Service | Username |
+|---|---|---|
+| Claude Code OAuth token | `adda-dev:anthropic` | `oauth` (default; override via `[llm.anthropic] secret_name` in `config.toml`) |
+| GitHub Token | `adda-dev:github` | `secret_name` from the project file |
+| DeepSeek API key | `adda-dev:deepseek` | `apikey` (default; override via `[llm.deepseek] secret_name` in `config.toml`) |
 
-All entries use the `adda-dev` service namespace. `account` identifies the target system; `key` identifies the credential within that system, configured per-repo in `adda-dev.env` via `ADDA_DEV_KEYRING_GITHUB_KEY`, `ADDA_DEV_KEYRING_CLAUDE_KEY`, and `ADDA_DEV_KEYRING_DEEPSEEK_KEY`. Multiple GitHub repos can coexist in one keyring by using distinct key values (e.g. `acme-token`, `otherrepo-token`).
+Each entry uses a namespaced service name (`adda-dev:<system>`) and a `username` attribute. The GitHub username is the `secret_name` value from the project TOML file, allowing multiple repos to coexist in one keyring by using distinct values (e.g. `acme-token`, `otherrepo-token`).
 
 ### Retrieval
 
-The launcher retrieves the required credentials at runtime:
+The launcher retrieves credentials at runtime using the Python `keyring` library, which accesses the host Secret Service directly over D-Bus. No `secret-tool` binary is invoked. If a credential is not found, the launcher fails fast with an error identifying the missing entry.
+
+To verify stored entries manually:
 
 ```bash
-CLAUDE_CODE_OAUTH_TOKEN=$(secret-tool lookup service adda-dev account claude key oauth)
-GITHUB_TOKEN_=$(secret-tool lookup service adda-dev account github key {repo}-token)
+secret-tool lookup service adda-dev:anthropic username oauth
+secret-tool lookup service adda-dev:github username <secret_name>
 ```
-
-If either lookup returns empty, the launcher fails fast with a bootstrap-procedure pointer.
 
 ### Rotation
 
