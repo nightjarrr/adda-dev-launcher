@@ -222,6 +222,62 @@ def test_tmuxserver_new_session_uses_bundled_config(fake_tmux_path: Path) -> Non
     assert str(_BUNDLED_CONFIG) in argv
 
 
+def test_tmuxserver_new_session_with_env_includes_update_environment_in_argv(fake_tmux_path: Path) -> None:
+    server = TmuxServer()
+    session = _make_session()
+    # Include PATH so the subprocess can locate the fake tmux binary
+    env = {"MY_SECRET": "s3cr3t", "OTHER": "val", "PATH": os.environ["PATH"]}
+    server.new_session(session, "main", ["bash"], env=env)
+    argv = _read_argv(fake_tmux_path)
+    assert "set-option" in argv
+    assert "-g" in argv
+    assert "update-environment" in argv
+    assert ";" in argv
+    assert "MY_SECRET OTHER PATH" in argv
+
+
+def test_tmuxserver_new_session_with_env_secret_values_not_in_argv(fake_tmux_path: Path) -> None:
+    server = TmuxServer()
+    session = _make_session()
+    # Include PATH so the subprocess can locate the fake tmux binary
+    env = {"MY_SECRET": "s3cr3t", "OTHER": "val", "PATH": os.environ["PATH"]}
+    server.new_session(session, "main", ["bash"], env=env)
+    argv = _read_argv(fake_tmux_path)
+    assert "s3cr3t" not in argv
+    assert "val" not in argv
+
+
+def test_tmuxserver_new_session_without_env_omits_set_option(fake_tmux_path: Path) -> None:
+    server = TmuxServer()
+    session = _make_session()
+    server.new_session(session, "main", ["bash"])
+    argv = _read_argv(fake_tmux_path)
+    assert "set-option" not in argv
+    assert "update-environment" not in argv
+    assert ";" not in argv
+
+
+def test_tmuxserver_new_session_with_env_passes_env_to_runner(fake_tmux_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from adda_dev.infra import tmux as tmux_module
+    from adda_dev.infra.process import CapturedOutputRunner, ProcessHandle
+
+    recorded: list[tuple[list[str], dict[str, str] | None]] = []
+
+    class _TrackingRunner(CapturedOutputRunner):
+        def run(self, cmd: list[str], env: dict[str, str] | None = None) -> ProcessHandle:
+            recorded.append((cmd, env))
+            # Pass None to Popen so the subprocess inherits the full environment (PATH intact)
+            return super().run(cmd, None)
+
+    monkeypatch.setattr(tmux_module, "CapturedOutputRunner", _TrackingRunner)
+    server = TmuxServer()
+    session = _make_session()
+    server.new_session(session, "main", ["bash"], env={"MY_SECRET": "s3cr3t"})
+    new_session_calls = [(cmd, env) for cmd, env in recorded if "new-session" in cmd]
+    assert len(new_session_calls) == 1
+    assert new_session_calls[0][1] == {"MY_SECRET": "s3cr3t"}
+
+
 # ---------------------------------------------------------------------------
 # TmuxServer — kill_server
 # ---------------------------------------------------------------------------
