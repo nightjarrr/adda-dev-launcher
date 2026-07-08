@@ -102,22 +102,12 @@ class TmuxServer:
     def new_session(self, session: Session, window_name: str, cmd: list[str], env: dict[str, str] | None = None) -> TmuxSession:
         """Create a new detached tmux session and return a TmuxSession handle."""
         session_name = session.session_id
-        self._runner.run(
-            [
-                "tmux",
-                "-L",
-                TMUX_SERVER_NAME,
-                "-f",
-                str(_BUNDLED_CONFIG),
-                "new-session",
-                "-d",
-                "-s",
-                session_name,
-                "-n",
-                window_name,
-                *cmd,
-            ]
-        ).raise_if_failed("tmux new-session failed")
+        tmux_cmd = ["tmux", "-L", TMUX_SERVER_NAME, "-f", str(_BUNDLED_CONFIG)]
+        if env:
+            keys_str = " ".join(env.keys())
+            tmux_cmd += ["set-option", "-g", "update-environment", keys_str, ";"]
+        tmux_cmd += ["new-session", "-d", "-s", session_name, "-n", window_name, *cmd]
+        self._runner.run(tmux_cmd, env).raise_if_failed("tmux new-session failed")
         return TmuxSession(session_name)
 
     def kill_server(self) -> None:
