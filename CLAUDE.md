@@ -1,6 +1,6 @@
 # adda-dev-launcher
 
-This is the host-side launcher for the ADDA Dev Runtime. It runs on the host machine (outside any container) and is responsible for reading `adda-dev.env`, fetching keyring tokens, and launching the ADDA Dev Runtime container via Docker.
+This is the host-side launcher for the ADDA Dev Runtime. It runs on the host machine (outside any container) and is responsible for reading host and project configuration from `~/.config/adda-dev/`, fetching credentials from the OS keyring, and launching the ADDA Dev Runtime container via Docker.
 
 ## Project overview
 
@@ -20,7 +20,11 @@ src/adda_dev/            # Python package source
     envoy.yaml.template  # Envoy proxy sidecar template (copied from launcher/)
     adda-dev.tmux.conf   # tmux session configuration (copied from launcher/)
 tests/                   # pytest test suite
-  conftest.py            # pytest configuration
+  conftest.py            # pytest configuration and shared test doubles
+docs/                    # design and reference documentation
+  architecture.md        # Python package architecture: principles, layout, config/project model
+  conventions.md         # coding conventions for this repo
+  launcher-container-contract.md  # authoritative host-container runtime contract
 launcher/                # host-side Bash launcher (active until #52 is complete)
   adda-dev.sh            # launcher entry-point script
   adda-dev.env.example   # example environment configuration
@@ -31,8 +35,6 @@ uv.lock                  # locked dependency versions (committed)
 .python-version          # pins Python 3.14 for uv
 .adda-init.sh            # repo-level init hook (syncs deps, installs pre-commit hook)
 .quality-gates.toml      # local quality gate definitions
-docs/architecture.md     # Python package architecture: principles, layout, config/project model
-docs/conventions.md      # coding conventions for this repo
 ```
 
 ## Toolchain
