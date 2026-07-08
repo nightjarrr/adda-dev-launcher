@@ -59,6 +59,17 @@ def _make_session(session_id: str = "adda-dev-session-abc12345") -> Session:
     )
 
 
+def _make_session_with_dir(tmp_path: Path, session_id: str = "adda-dev-session-abc12345") -> Session:
+    runtime_dir = tmp_path / session_id
+    runtime_dir.mkdir()
+    return Session(
+        session_id=session_id,
+        project_name="test-project",
+        started_at=datetime.now(UTC),
+        runtime_dir=runtime_dir,
+    )
+
+
 @pytest.fixture()
 def fake_tmux_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Fake tmux binary reporting version 3.4; prepended to PATH."""
@@ -485,12 +496,12 @@ def _make_manager(fake_tmux_path: Path, tmux_config: TmuxSessionConfig | None = 
 # ---------------------------------------------------------------------------
 
 
-def test_tmuxprimarywindow_open_invokes_new_session(fake_tmux_path: Path) -> None:
+def test_tmuxprimarywindow_open_invokes_new_session(fake_tmux_path: Path, tmp_path: Path) -> None:
     from tests.conftest import FakeOutput
 
     manager = _make_manager(fake_tmux_path)
     output = FakeOutput()
-    session = _make_session("adda-dev-session-abc12345")
+    session = _make_session_with_dir(tmp_path, "adda-dev-session-abc12345")
     window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
     window.open(["bash"])
     argv = _read_argv(fake_tmux_path)
@@ -500,35 +511,35 @@ def test_tmuxprimarywindow_open_invokes_new_session(fake_tmux_path: Path) -> Non
     assert "bash" in argv
 
 
-def test_tmuxprimarywindow_open_sets_manager_tmux_session(fake_tmux_path: Path) -> None:
+def test_tmuxprimarywindow_open_sets_manager_tmux_session(fake_tmux_path: Path, tmp_path: Path) -> None:
     from tests.conftest import FakeOutput
 
     manager = _make_manager(fake_tmux_path)
     output = FakeOutput()
-    session = _make_session("adda-dev-session-abc12345")
+    session = _make_session_with_dir(tmp_path)
     window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
     assert manager._tmux_session is None
     window.open(["bash"])
     assert manager._tmux_session is not None
 
 
-def test_tmuxprimarywindow_open_emits_session_started_step(fake_tmux_path: Path) -> None:
+def test_tmuxprimarywindow_open_emits_session_started_step(fake_tmux_path: Path, tmp_path: Path) -> None:
     from tests.conftest import FakeOutput
 
     manager = _make_manager(fake_tmux_path)
     output = FakeOutput()
-    session = _make_session("adda-dev-session-abc12345")
+    session = _make_session_with_dir(tmp_path)
     window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
     window.open(["bash"])
     assert ("tmux session", "started") in output.step_calls
 
 
-def test_tmuxprimarywindow_attach_invokes_attach_session(fake_tmux_path: Path) -> None:
+def test_tmuxprimarywindow_attach_invokes_attach_session(fake_tmux_path: Path, tmp_path: Path) -> None:
     from tests.conftest import FakeOutput
 
     manager = _make_manager(fake_tmux_path)
     output = FakeOutput()
-    session = _make_session("adda-dev-session-abc12345")
+    session = _make_session_with_dir(tmp_path, "adda-dev-session-abc12345")
     window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
     window.open(["bash"])
     window.attach()
@@ -537,12 +548,12 @@ def test_tmuxprimarywindow_attach_invokes_attach_session(fake_tmux_path: Path) -
     assert "adda-dev-session-abc12345" in argv
 
 
-def test_tmuxprimarywindow_close_invokes_kill_window(fake_tmux_path: Path) -> None:
+def test_tmuxprimarywindow_close_invokes_kill_window(fake_tmux_path: Path, tmp_path: Path) -> None:
     from tests.conftest import FakeOutput
 
     manager = _make_manager(fake_tmux_path)
     output = FakeOutput()
-    session = _make_session("adda-dev-session-abc12345")
+    session = _make_session_with_dir(tmp_path, "adda-dev-session-abc12345")
     window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
     window.open(["bash"])
     window.close()
@@ -559,6 +570,58 @@ def test_tmuxprimarywindow_close_before_open_is_noop(fake_tmux_path: Path) -> No
     session = _make_session("adda-dev-session-abc12345")
     window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
     window.close()  # must not raise
+
+
+def test_tmuxprimarywindow_open_generates_run_script(fake_tmux_path: Path, tmp_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session_with_dir(tmp_path)
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    window.open(["docker", "run", "image"])
+    assert (session.runtime_dir / "run-primary-window.sh").exists()
+
+
+def test_tmuxprimarywindow_open_script_is_executable(fake_tmux_path: Path, tmp_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session_with_dir(tmp_path)
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    window.open(["docker", "run", "image"])
+    script_path = session.runtime_dir / "run-primary-window.sh"
+    assert os.access(script_path, os.X_OK)
+
+
+def test_tmuxprimarywindow_open_script_contains_session_id(fake_tmux_path: Path, tmp_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session_with_dir(tmp_path, session_id="adda-dev-session-abc12345")
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    window.open(["docker", "run", "image"])
+    script_path = session.runtime_dir / "run-primary-window.sh"
+    assert "kill-session -t adda-dev-session-abc12345" in script_path.read_text()
+
+
+def test_tmuxprimarywindow_open_wraps_cmd_with_script(fake_tmux_path: Path, tmp_path: Path) -> None:
+    from tests.conftest import FakeOutput
+
+    manager = _make_manager(fake_tmux_path)
+    output = FakeOutput()
+    session = _make_session_with_dir(tmp_path)
+    window = TmuxPrimaryWindow("main", manager._server, session, manager, output)
+    window.open(["docker", "run", "image"])
+    argv = _read_argv(fake_tmux_path)
+    script_str = str(session.runtime_dir / "run-primary-window.sh")
+    assert script_str in argv
+    assert "docker" in argv
+    assert "run" in argv
+    assert "image" in argv
+    assert argv.index(script_str) < argv.index("docker")
 
 
 # ---------------------------------------------------------------------------
