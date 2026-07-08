@@ -183,7 +183,12 @@ class TmuxPrimaryWindow(Window):
         if self._domain_session is None:
             raise TmuxError("open() called before session was initialized")
         with self._output.step("tmux session") as s:
-            self._tmux = self._server.new_session(self._domain_session, self.name, cmd, env)
+            script_path = self._domain_session.runtime_dir / "run-primary-window.sh"
+            script_path.write_text(
+                f'#!/bin/bash\n"$@"\ntmux -L {TMUX_SERVER_NAME} kill-session -t {self._domain_session.session_id}\n'
+            )
+            script_path.chmod(0o755)
+            self._tmux = self._server.new_session(self._domain_session, self.name, [str(script_path), *cmd], env)
             s.done("started")
         self._manager._set_tmux_session(self._tmux)
 
