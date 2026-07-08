@@ -172,7 +172,7 @@ Replace `/ready` with `/stats`, `/listeners`, `/clusters`, or `/config_dump` for
 - **Linux only.** Ubuntu 24.04 is the tested platform. No plans to support other platforms.
 - **Ephemeral by design.** The container has no persistent storage. Push commits to GitHub before ending a session — anything not pushed is lost.
 - **Personal project.** Features and design reflect personal workflows. PRs from external contributors are not being accepted. Feel free to fork and adapt.
-- **Legacy Bash launcher.** A tarball of the `launcher/` directory is attached to each release for reference. The Bash launcher (`launcher/adda-dev.sh`) is no longer the active launcher and is pending removal.
+- **Legacy Bash launcher.** The Bash launcher (`launcher/adda-dev.sh`) is no longer the active launcher and is pending removal.
 
 ---
 

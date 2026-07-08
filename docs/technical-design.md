@@ -105,7 +105,7 @@ Multiple features may run concurrently. Each invocation gets its own AI harness 
 
 ### Legacy Bash launcher
 
-`launcher/adda-dev.sh` was the original host-side launcher. It is preserved in the repository and distributed as a tarball in each release for reference. It is no longer the active launcher and is pending removal.
+`launcher/adda-dev.sh` was the original host-side launcher. It is preserved in the repository for reference and is pending removal.
 
 ---
 

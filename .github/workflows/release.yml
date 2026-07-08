@@ -36,13 +36,8 @@ jobs:
       - name: Build wheel
         run: uv build --wheel
 
-      - name: Package launcher tarball
-        run: tar -czf adda-dev-launcher-${{ github.ref_name }}.tar.gz launcher/
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/*.whl
-            adda-dev-launcher-${{ github.ref_name }}.tar.gz
+          files: dist/*.whl
           generate_release_notes: true
