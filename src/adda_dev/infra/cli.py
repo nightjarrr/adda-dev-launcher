@@ -3,6 +3,8 @@ adda-dev CLI entry point and composition root.
 """
 
 import signal
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _metadata_version
 from types import FrameType
 
 import typer
@@ -22,6 +24,15 @@ from .project import TomlProjectRepository
 from .proxy import EnvoySidecar
 from .session import DirectSessionManager, FsSessionRepository
 from .tmux import TmuxServer, TmuxSessionManager
+
+UNKNOWN_VERSION = "0.0.0.dev0"
+
+
+def get_version() -> str:
+    try:
+        return _metadata_version("adda-dev")
+    except PackageNotFoundError:
+        return UNKNOWN_VERSION
 
 
 def _resolve_session_mode(config_mode: SessionModeChoice, use_tmux: bool | None) -> SessionModeChoice:
@@ -47,12 +58,33 @@ def _terminate_on_sigterm(signum: int, frame: FrameType | None) -> None:
     raise SystemExit(128 + signum)
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(get_version())
+        raise typer.Exit()
+
+
 app = typer.Typer(no_args_is_help=True)
 
 
 @app.callback()
-def main() -> None:
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show version and exit.",
+    ),
+) -> None:
     """ADDA Dev Runtime launcher."""
+
+
+@app.command()
+def version() -> None:
+    """Show the installed version."""
+    typer.echo(get_version())
 
 
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
@@ -74,7 +106,7 @@ def run(
 
     try:
         config = load_app_config()
-        output.ruler("adda-dev")
+        output.ruler(f"adda-dev {get_version()}")
         engine = create_engine(config.container_engine, output)
         project_repo = TomlProjectRepository(config.project_defaults, source)
         provider_repo = LlmConfigProviderRepository(config.llm, source)

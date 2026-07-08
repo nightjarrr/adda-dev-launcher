@@ -1,6 +1,7 @@
 """Tests for adda_dev.infra.cli."""
 
 import signal
+from importlib.metadata import PackageNotFoundError
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,7 +13,14 @@ from adda_dev.domain.github import GitHub
 from adda_dev.domain.llm import AnthropicProvider, LlmProvider
 from adda_dev.domain.project import Project
 from adda_dev.domain.tmpfs import TmpfsSizes
-from adda_dev.infra.cli import _resolve_provider, _resolve_session_mode, _terminate_on_sigterm, app
+from adda_dev.infra.cli import (
+    UNKNOWN_VERSION,
+    _resolve_provider,
+    _resolve_session_mode,
+    _terminate_on_sigterm,
+    app,
+    get_version,
+)
 from adda_dev.infra.config import ContainerEngineChoice, SessionConfig, SessionModeChoice
 from adda_dev.infra.container import ContainerEngineUnavailableError
 from adda_dev.infra.llm import LlmConfig
@@ -551,3 +559,52 @@ def test_run_tmux_flag_overrides_config_to_tmux() -> None:
 
     assert result.exit_code == 0
     mock_tmux_manager.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# version reporting — get_version(), --version / -V flags, version subcommand
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def mock_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("adda_dev.infra.cli._metadata_version", lambda _: "1.2.3")
+
+
+def test_get_version_when_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("adda_dev.infra.cli._metadata_version", lambda _: "1.2.3")
+    assert get_version() == "1.2.3"
+
+
+def test_get_version_when_not_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise(_: str) -> str:
+        raise PackageNotFoundError("adda-dev")
+
+    monkeypatch.setattr("adda_dev.infra.cli._metadata_version", _raise)
+    assert get_version() == UNKNOWN_VERSION
+
+
+def test_version_flag(mock_version: None) -> None:
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert result.output.strip() == "1.2.3"
+
+
+def test_version_short_flag(mock_version: None) -> None:
+    result = runner.invoke(app, ["-V"])
+    assert result.exit_code == 0
+    assert result.output.strip() == "1.2.3"
+
+
+def test_version_command(mock_version: None) -> None:
+    result = runner.invoke(app, ["version"])
+    assert result.exit_code == 0
+    assert result.output.strip() == "1.2.3"
+
+
+def test_run_header_includes_version(mock_version: None) -> None:
+    patches = _make_provider_patch_context()
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        result = runner.invoke(app, ["run", "demo"])
+    assert result.exit_code == 0
+    assert "adda-dev 1.2.3" in result.output
